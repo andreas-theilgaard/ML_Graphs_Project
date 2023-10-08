@@ -86,3 +86,9 @@ target/
 # vim
 *.swp
 *.swo
+
+.hydra
+/models
+*quick.py
+*src/experiments/run_experimentsss.py
+*src/experiments/run_GNN_experiments.py

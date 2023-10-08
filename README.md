@@ -1,7 +1,35 @@
 ML_Graphs_Project
 ==============================
 
-A short description of the project.
+Environment Setup
+------------
+First create a virtual environment by
+```
+conda create -n <env_name> python=3.10
+conda activate <env_name>
+```
+Then install the requirements and the repository setup by.
+```
+pip install -e .
+```
+
+Additionally, the torch related packages can be installed using
+```
+pip install --no-cache-dir torch==2.0.1
+pip install git+https://github.com/rusty1s/pytorch_sparse.git
+pip install git+https://github.com/rusty1s/pytorch_scatter.git
+pip install git+https://github.com/rusty1s/pytorch_cluster.git
+pip --no-cache-dir install torch-geometric
+```
+
+Running Experiments
+------------
+Experiments are executed using the `src/experiments/run_experiments.py` file.
+Example 1:
+```
+python3 src/experiments/run_experiments.py --config-name='base.yaml' model=DownStream
+```
+
 
 Project Organization
 ------------
@@ -53,5 +81,3 @@ Project Organization
 
 
 --------
-
-<p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>

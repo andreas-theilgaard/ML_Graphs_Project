@@ -1,0 +1,9 @@
+model_name: GNN
+model: 'GraphSage'
+
+training:
+  hidden_channels: 256
+  num_layers: 3
+  dropout: 0.5
+  lr: 0.01
+  epochs: 500

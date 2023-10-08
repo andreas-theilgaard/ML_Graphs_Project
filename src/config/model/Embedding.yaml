@@ -1,0 +1,5 @@
+model_name: Embedding
+model: 'Node2Vec'
+
+training:
+  embedding_dim: 128
