@@ -9,8 +9,9 @@ from src.models.EmbeddingNetworks.Node2Vec import Node2Vec
 from src.models.GNN.GNN import GNN
 import argparse
 from torch_geometric.utils import to_undirected
-from src.models.mlp import MLP_model
-from ogb.nodeproppred import Evaluator
+from src.models.mlp import MLP_model, MLP_LinkPrediction
+from ogb.nodeproppred import Evaluator as eval_classifier
+from ogb.linkproppred import Evaluator as eval_linkPredictor
 import random
 from tqdm import tqdm
 
@@ -104,43 +105,79 @@ def main(config):
         model.train()
 
     elif config.model.model_name == "DownStream":
-        split_idx = dataset.get_idx_split()
+        if config.task == "LinkPrediction":
+            split_edge = dataset.get_edge_split()
+            if config.model.saved_embeddings and config.model.using_features:
+                embedding = torch.load(
+                    config.model.saved_embeddings, map_location=config.device
+                )
+                x = torch.cat([data.x, embedding], dim=-1)
+            if config.model.saved_embeddings and not config.model.using_features:
+                embedding = torch.load(
+                    config.model.saved_embeddings, map_location=config.device
+                )
+                x = embedding
+            if not config.model.saved_embeddings and config.model.using_features:
+                x = data.x
+            X = x.to(config.device)
 
-        if config.model.saved_embeddings and config.model.using_features:
-            embedding = torch.load(
-                config.model.saved_embeddings, map_location=config.device
+            evaluator = eval_linkPredictor(name=config.dataset)
+            model = MLP_LinkPrediction(
+                task=config.task,
+                device=config.device,
+                in_channels=X.shape[-1],
+                hidden_channels=training_args.hidden_channels,
+                out_channels=1,
+                num_layers=training_args.num_layers,
+                dropout=training_args.dropout,
+                log=log,
             )
-            x = torch.cat([data.x, embedding], dim=-1)
-        if config.model.saved_embeddings and not config.model.using_features:
-            embedding = torch.load(
-                config.model.saved_embeddings, map_location=config.device
+            model.fit(
+                X=X,
+                split_edge=split_edge,
+                lr=training_args.lr,
+                batch_size=training_args.batch_size,
+                epochs=training_args.epochs,
+                evaluator=evaluator,
             )
-            x = embedding
-        if not config.model.saved_embeddings and config.model.using_features:
-            x = data.x
-        X = x.to(config.device)
-        y = data.y.to(config.device)
 
-        evaluator = Evaluator(name=config.dataset)
+        if config.task == "NodeClassification":
+            split_idx = dataset.get_idx_split()
 
-        model = MLP_model(
-            task=config.task,
-            device=config.device,
-            in_channels=x.shape[-1],
-            hidden_channels=training_args.hidden_channels,
-            out_channels=dataset.num_classes,
-            num_layers=training_args.num_layers,
-            dropout=training_args.dropout,
-            log=log,
-        )
-        model.fit(
-            X=X,
-            y=y,
-            epochs=training_args.epochs,
-            split_idx=split_idx,
-            evaluator=evaluator,
-            lr=training_args.lr,
-        )
+            if config.model.saved_embeddings and config.model.using_features:
+                embedding = torch.load(
+                    config.model.saved_embeddings, map_location=config.device
+                )
+                x = torch.cat([data.x, embedding], dim=-1)
+            if config.model.saved_embeddings and not config.model.using_features:
+                embedding = torch.load(
+                    config.model.saved_embeddings, map_location=config.device
+                )
+                x = embedding
+            if not config.model.saved_embeddings and config.model.using_features:
+                x = data.x
+            X = x.to(config.device)
+            y = data.y.to(config.device)
+
+            evaluator = Evaluator(name=config.dataset)
+
+            model = MLP_model(
+                device=config.device,
+                in_channels=x.shape[-1],
+                hidden_channels=training_args.hidden_channels,
+                out_channels=dataset.num_classes,
+                num_layers=training_args.num_layers,
+                dropout=training_args.dropout,
+                log=log,
+            )
+            model.fit(
+                X=X,
+                y=y,
+                epochs=training_args.epochs,
+                split_idx=split_idx,
+                evaluator=evaluator,
+                lr=training_args.lr,
+            )
 
     elif config.model.model_name == "Combined":
         print("Run combined")

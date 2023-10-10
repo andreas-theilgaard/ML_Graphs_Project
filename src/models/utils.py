@@ -19,4 +19,4 @@ def create_path(save_path):
 
 
 def cur_time():
-    return (datetime.now()).strftime("%m/%d-%H:%M")
+    return (datetime.now()).strftime("%b-%d %H:%M")

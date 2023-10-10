@@ -1,4 +1,5 @@
 from ogb.nodeproppred import PygNodePropPredDataset
+from ogb.linkproppred import PygLinkPropPredDataset
 from torch_geometric.utils import to_undirected
 import torch_geometric.transforms as T
 import torch
@@ -20,7 +21,7 @@ class DataLoader:
         assert self.task_type in [
             "NodeClassification",
             "LinkPrediction",
-        ], f"Expect task_type to be either 'NodeClassification' or 'LinkPrediction' but received {task_type}"
+        ], f"Expect task_type to be either 'NodeClassification' or 'LinkPrediction' but received {self.task_type}"
         if self.task_type == "NodeClassification":
             assert self.dataset in [
                 "ogbn-arxiv",
@@ -28,8 +29,8 @@ class DataLoader:
             ], f"Expect NodeClassification dataset to be one of ['ogbn-arxiv'] but received {self.dataset}"
         if self.task_type == "LinkPrediction":
             assert self.dataset in [
-                "ogbn-arxiv"
-            ], f"Expect LinkPrediction dataset to be one of ['ogbn-arxiv'] but received {self.dataset}"
+                "ogbl-collab"
+            ], f"Expect LinkPrediction dataset to be one of ['ogbl-collab'] but received {self.dataset}"
 
     def get_NodeClassification_dataset(self):
         dataset = (
@@ -43,6 +44,11 @@ class DataLoader:
         # data = dataset[0]
         # if not data.is_undirected():
         #    data.edge_index = to_undirected(data.edge_index,num_nodes=data.num_nodes)
+        return dataset
+
+    def get_LinkPrediction_dataset(self):
+        dataset = PygLinkPropPredDataset(name=self.dataset, root="data")
+        self.dataset_summary(dataset)
         return dataset
 
     def dataset_summary(self, dataset):
@@ -66,4 +72,4 @@ class DataLoader:
         if self.task_type == "NodeClassification":
             return self.get_NodeClassification_dataset()
         elif self.task_type == "LinkPrediction":
-            print("Not implemented yet")
+            return self.get_LinkPrediction_dataset()

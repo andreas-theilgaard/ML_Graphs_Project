@@ -10,17 +10,24 @@ conda activate <env_name>
 ```
 Then install the requirements and the repository setup by.
 ```
-pip install -e .
+pip install -r requirements.txt
 ```
 
 Additionally, the torch related packages can be installed using
 ```
-pip install --no-cache-dir torch==2.0.1
+pip install --no-cache-dir torch
 pip install git+https://github.com/rusty1s/pytorch_sparse.git
 pip install git+https://github.com/rusty1s/pytorch_scatter.git
 pip install git+https://github.com/rusty1s/pytorch_cluster.git
 pip --no-cache-dir install torch-geometric
 ```
+
+pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-2.0.0+cu117.html
+
+pip install --no-cache-dir install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+cu117.html
+pip --no-cache-dir install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+cu117.html
+pip --no-cache-dir install torch-cluster -f https://data.pyg.org/whl/torch-2.0.0+cu117.html
+#pip --no-cache-dir install torch==2.0.0 --index-url https://download.pytorch.org/whl/cu117
 
 Running Experiments
 ------------

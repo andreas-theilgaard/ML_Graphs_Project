@@ -1,7 +1,6 @@
 import torch
 from torch_geometric.nn import Node2Vec as N2V
 from tqdm import tqdm
-from src.models.utils import create_path, cur_time
 
 
 class Node2Vec:
@@ -30,11 +29,8 @@ class Node2Vec:
         ).to(device)
 
     def save_embeddings(self, model):
-        create_path(self.save_path)
-        torch.save(
-            model.embedding.weight.data.cpu(),
-            self.save_path + f"embedding_{cur_time()}.pth",
-        )
+        self.embedding_save_path = self.save_path + "embedding.pth"
+        torch.save(model.embedding.weight.data.cpu(), self.embedding_save_path)
 
     def train(self, batch_size, epochs, lr, num_workers=0):
         loader = self.model.loader(
