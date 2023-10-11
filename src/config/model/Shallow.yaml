@@ -1,0 +1,10 @@
+model_name: Shallow
+model: 'Shallow'
+
+training:
+  embedding_dim: 128
+  num_negative_samples: 1
+  initialize: 'Random'
+  lr: 0.01
+  momemtum: 0.9
+  epochs: 150

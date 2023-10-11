@@ -32,4 +32,4 @@ class SAGE(torch.nn.Module):
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.convs[-1](x, adj_t)
-        return x.log_softmax(dim=-1)
+        return x  # x.log_softmax(dim=-1)

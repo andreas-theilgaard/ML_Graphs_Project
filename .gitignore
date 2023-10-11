@@ -94,3 +94,4 @@ target/
 *src/experiments/run_GNN_experiments.py
 *ged.py
 /outputs
+*.pth

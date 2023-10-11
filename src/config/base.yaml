@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: DownStream
+  - model: GNN
 
 version: 'Graph Project v1'
 

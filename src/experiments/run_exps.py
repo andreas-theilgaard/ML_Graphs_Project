@@ -4,8 +4,10 @@ import logging
 import torch
 from src.data.get_data import DataLoader
 from src.models.mlp_nodeclass import mlp_node_classification
+from src.models.mlp_linkpredict import mlp_LinkPrediction
 from src.models.EmbeddingNetworks.Node2Vec import Node2Vec
 from src.models.GNN.GNN import GNN_trainer
+from src.models.GNN.GNN_link import GNN_link_trainer
 from torch_geometric.utils import to_undirected
 import random
 
@@ -44,7 +46,13 @@ def main(config):
                 save_path=save_path,
             )
         elif config.task == "LinkPrediction":
-            print("Not implemented yet")
+            mlp_LinkPrediction(
+                dataset=dataset,
+                config=config,
+                training_args=training_args,
+                log=log,
+                save_path=save_path,
+            )
 
     elif config.model.model_name == "Node2Vec":
         data = dataset[0]
@@ -68,7 +76,16 @@ def main(config):
             num_workers=training_args.num_workers,
         )
     elif config.model.model_name == "GNN":
-        GNN_trainer(dataset, config, training_args, save_path, log)
+        if config.task == "NodeClassification":
+            GNN_trainer(dataset, config, training_args, save_path, log)
+        elif config.task == "LinkPrediction":
+            GNN_link_trainer(
+                dataset=dataset,
+                config=config,
+                training_args=training_args,
+                save_path=save_path,
+                log=log,
+            )
 
     elif config.model.model_name == "Shallow":
         print("not implemented yet")
