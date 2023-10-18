@@ -4,9 +4,9 @@ using_features: True
 
 
 training:
-  epochs: 200
+  epochs: 500
   num_layers: 3
-  dropout: 0.0
+  dropout: 0.5
   lr: 0.01
   hidden_channels: 256
   batch_size: 65536

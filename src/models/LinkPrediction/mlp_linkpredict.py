@@ -3,48 +3,11 @@ import torch.nn.functional as F
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from torch_geometric.utils import negative_sampling
 import numpy as np
-
-
-class NodeClassifier(nn.Module):
-    def __init__(
-        self,
-        task: str,
-        in_channels: int,
-        hidden_channels: int,
-        out_channels: int,
-        num_layers: int,
-        dropout: float,
-    ):
-        super(NodeClassifier, self).__init__()
-        self.dropout = dropout
-
-        # Create linear and batchnorm layers
-        self.linear = nn.ModuleList()
-        self.linear.append(torch.nn.Linear(in_channels, hidden_channels))
-        self.batch_norm = torch.nn.ModuleList()
-        self.batch_norm.append(torch.nn.BatchNorm1d(hidden_channels))
-
-        for _ in range(num_layers - 2):
-            self.linear.append(torch.nn.Linear(hidden_channels, hidden_channels))
-            self.batch_norm.append(torch.nn.BatchNorm1d(hidden_channels))
-        self.linear.append(torch.nn.Linear(hidden_channels, out_channels))
-
-    def reset_parameters(self):
-        for lin in self.linear:
-            lin.reset_parameters()
-        for bn in self.batch_norm:
-            bn.reset_parameters()
-
-    def forward(self, x):
-        for i, lin_layer in enumerate(self.linear[:-1]):
-            x = lin_layer(x)
-            x = self.batch_norm[i](x)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.linear[-1](x)
-        return torch.log_softmax(x, dim=-1)
+from ogb.linkproppred import Evaluator
+from src.models.logger import LoggerClass
+from src.models.utils import set_seed
+from src.models.utils import prepare_metric_cols
 
 
 class LinkPredictor(nn.Module):
@@ -91,6 +54,8 @@ class MLP_LinkPrediction:
         num_layers: int,
         dropout: float,
         log,
+        save_path,
+        logger,
     ):
         self.device = device
         self.model = LinkPredictor(
@@ -102,6 +67,8 @@ class MLP_LinkPrediction:
         )
         self.model.to(device)
         self.log = log
+        self.save_path = save_path
+        self.logger = logger
 
     def train(self, X, split_edge, optimizer, batch_size):
         self.model.train()
@@ -109,6 +76,7 @@ class MLP_LinkPrediction:
         positive_edges = split_edge["train"]["edge"].to(self.device)
         total_loss, total_examples = 0, 0
         loss_fn = torch.nn.BCELoss()
+
         for perm in DataLoader(
             range(positive_edges.size(0)), batch_size=batch_size, shuffle=True
         ):
@@ -124,11 +92,6 @@ class MLP_LinkPrediction:
             neg_preds = self.model(X[neg_edge[0]], X[neg_edge[1]])
             neg_loss = -torch.log(1 - neg_preds + 1e-15).mean()
             loss = pos_loss + neg_loss
-
-            print(
-                (positive_preds >= 0.5).float().mean(),
-                (neg_preds >= 0.5).float().mean(),
-            )
 
             # option 2
             # neg_edge = torch.randint(0,X.size(0),pos_edge.size(),dtype=torch.long,device=self.device)
@@ -157,9 +120,14 @@ class MLP_LinkPrediction:
     def test(self, x, split_edge, evaluator, batch_size):
         self.model.eval()
 
+        # get training edges
         pos_train_edge = split_edge["train"]["edge"].to(x.device)
+
+        # get validation edges
         pos_valid_edge = split_edge["valid"]["edge"].to(x.device)
         neg_valid_edge = split_edge["valid"]["edge_neg"].to(x.device)
+
+        # get test edges
         pos_test_edge = split_edge["test"]["edge"].to(x.device)
         neg_test_edge = split_edge["test"]["edge_neg"].to(x.device)
 
@@ -215,14 +183,15 @@ class MLP_LinkPrediction:
                 }
             )[f"hits@{K}"]
 
-            results[f"Hits@{K}"] = (train_hits, valid_hits, test_hits)
+            results[f"hits@{K}"] = (train_hits, valid_hits, test_hits)
 
         return results
 
     def fit(self, X, split_edge, lr, batch_size, epochs, evaluator):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
         prog_bar = tqdm(range(epochs))
-        for epoch in prog_bar:
+
+        for i, epoch in enumerate(prog_bar):
             loss = self.train(X, split_edge, optimizer, batch_size)
             results = self.test(
                 X, split_edge=split_edge, evaluator=evaluator, batch_size=batch_size
@@ -230,92 +199,86 @@ class MLP_LinkPrediction:
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train Acc.": results["Hits@50"][0],
-                    "Val Acc.": results["Hits@50"][1],
-                    "Test Acc.": results["Hits@50"][2],
+                    "Train Acc.": results["hits@50"][0],
+                    "Val Acc.": results["hits@50"][1],
+                    "Test Acc.": results["hits@50"][2],
                 }
+            )
+            self.logger.add_to_run(
+                np.array(
+                    [
+                        loss,
+                        results["hits@50"][0],
+                        results["hits@50"][1],
+                        results["hits@50"][2],
+                    ]
+                )
             )
 
 
-class MLP_model:
-    def __init__(
-        self,
-        device,
-        in_channels: int,
-        hidden_channels: int,
-        out_channels: int,
-        num_layers: int,
-        dropout: float,
-        log,
+def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds):
+    data = dataset[0]
+    split_edge = dataset.get_edge_split()
+
+    if (
+        config.dataset[config.model_type].saved_embeddings
+        and config.dataset[config.model_type].using_features
     ):
-        self.device = device
-        self.model = NodeClassifier(
-            in_channels=in_channels,
-            hidden_channels=hidden_channels,
-            out_channels=out_channels,
-            num_layers=num_layers,
-            dropout=dropout,
+        embedding = torch.load(
+            config.model.saved_embeddings, map_location=config.device
         )
-        self.model.to(device)
-        self.log = log
-
-    def train(self, X, y, train_idx, optimizer):
-        self.model.train()
-        optimizer.zero_grad()
-        out = self.model(X[train_idx])
-        loss = F.nll_loss(out, y.squeeze(1)[train_idx])
-        loss.backward()
-        optimizer.step()
-        return loss.item()
-
-    @torch.no_grad()
-    def test(self, X, y, split_idx, evaluator):
-        self.model.eval()
-        with torch.no_grad():
-            out = self.model(X)
-            y_hat = out.argmax(dim=-1, keepdim=True)
-            train_acc = evaluator.eval(
-                {
-                    "y_true": y[split_idx["train"]],
-                    "y_pred": y_hat[split_idx["train"]],
-                }
-            )["acc"]
-
-            valid_acc = evaluator.eval(
-                {
-                    "y_true": y[split_idx["valid"]],
-                    "y_pred": y_hat[split_idx["valid"]],
-                }
-            )["acc"]
-
-            test_acc = evaluator.eval(
-                {
-                    "y_true": y[split_idx["test"]],
-                    "y_pred": y_hat[split_idx["test"]],
-                }
-            )["acc"]
-
-        return train_acc, valid_acc, test_acc
-
-    def fit(self, X, y, epochs: int, split_idx, evaluator, lr):
-        # self.model.reset_parameters()
-        save_results = np.zeros((epochs, 4))
-
-        train_idx = split_idx["train"].to(self.device)
-        prog_bar = tqdm(range(epochs))
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
-        for i, epoch in enumerate(prog_bar):
-            loss = self.train(X=X, y=y, train_idx=train_idx, optimizer=optimizer)
-            result = self.test(X=X, y=y, split_idx=split_idx, evaluator=evaluator)
-            prog_bar.set_postfix(
-                {
-                    "Train Loss": loss,
-                    "Train Acc.": result[0],
-                    "Val Acc.": result[1],
-                    "Test Acc.": result[-1],
-                }
-            )
-            save_results[i, :] = loss, result[0], result[1], result[-1]
-        self.log.info(
-            f"Finished training - Train Loss: {loss}, Train Acc.: {result[0]}, Val Acc.: {result[1]}, Test Acc.{result[-1]}"
+        x = torch.cat([data.x, embedding], dim=-1)
+    if (
+        config.dataset[config.model_type].saved_embeddings
+        and not config.dataset[config.model_type].using_features
+    ):
+        embedding = torch.load(
+            config.model.saved_embeddings, map_location=config.device
         )
+        x = embedding
+    if (
+        not config.dataset[config.model_type].saved_embeddings
+        and config.dataset[config.model_type].using_features
+    ):
+        x = data.x
+    X = x.to(config.device)
+
+    evaluator = Evaluator(name=config.dataset.dataset_name)
+
+    Logger = LoggerClass(
+        runs=len(seeds),
+        metrics=prepare_metric_cols(config.dataset.metrics),
+        seeds=seeds,
+        log=log,
+    )
+
+    for seed in seeds:
+        set_seed(seed=seed)
+        Logger.start_run()
+
+        model = MLP_LinkPrediction(
+            device=config.device,
+            in_channels=X.shape[-1],
+            hidden_channels=training_args.hidden_channels,
+            out_channels=1,
+            num_layers=training_args.num_layers,
+            dropout=training_args.dropout,
+            log=log,
+            save_path=save_path,
+            logger=Logger,
+        )
+        model.fit(
+            X=X,
+            split_edge=split_edge,
+            lr=training_args.lr,
+            batch_size=training_args.batch_size,
+            epochs=training_args.epochs,
+            evaluator=evaluator,
+        )
+        Logger.end_run()
+
+    Logger.save_results(save_path + "/results.json")
+    Logger.get_statistics(
+        metrics=prepare_metric_cols(config.dataset.metrics),
+        directions=["-", "+", "+", "+"],
+    )
