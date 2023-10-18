@@ -82,19 +82,13 @@ class GNN:
         return train_acc, valid_acc, test_acc
 
 
-def GNN_trainer(dataset, config, training_args, log, save_path, seeds):
+def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
     evaluator = Evaluator(name=config.dataset.dataset_name)
     data.adj_t = data.adj_t.to_symmetric()
     split_idx = dataset.get_idx_split()
     # model.reset_parameters()
     train_idx = split_idx["train"].to(config.device)
-    Logger = LoggerClass(
-        runs=len(seeds),
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        seeds=seeds,
-        log=log,
-    )
 
     for seed in seeds:
         set_seed(seed)
@@ -131,6 +125,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds):
             Logger.add_to_run(np.array([loss, train_acc, valid_acc, test_acc]))
 
     Logger.end_run()
+    Logger.save_value({"loss": loss, "acc": test_acc})
     Logger.save_results(save_path + "/results.json")
     Logger.get_statistics(
         metrics=prepare_metric_cols(config.dataset.metrics),
@@ -138,5 +133,5 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds):
     )
 
     model.train()
-    print(f"saved model at {save_path+'/model.pth'}")
+    log.info(f"saved model at {save_path+'/model.pth'}")
     torch.save(model.state_dict(), save_path + "/model.pth")

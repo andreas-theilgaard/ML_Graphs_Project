@@ -4,6 +4,9 @@ import logging
 from src.data.get_data import DataLoader
 from torch_geometric.utils import to_undirected
 from src.models.utils import get_seeds
+from src.models.logger import LoggerClass
+from src.models.utils import prepare_metric_cols
+import sys
 
 # Node Classification
 from src.models.NodeClassification.mlp_nodeclass import mlp_node_classification
@@ -20,6 +23,7 @@ from src.models.shallow import ShallowTrainer
 
 
 log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 @hydra.main(version_base="1.2", config_path="../config")
@@ -31,6 +35,8 @@ def main(config):
         - config:
           yaml config file, please specify by using the --config-name flag
     """
+    if config.debug:
+        log.setLevel(logging.CRITICAL + 1)
 
     log.info(f"Starting experiment ... on {config.device}")
     log.info(
@@ -43,12 +49,19 @@ def main(config):
 
     # get seeds
     seeds = get_seeds(config.runs)
+    Logger = LoggerClass(
+        runs=len(seeds),
+        metrics=prepare_metric_cols(config.dataset.metrics),
+        seeds=seeds,
+        log=log,
+    )
 
     # get data
     dataset = DataLoader(
         task_type=config.dataset.task,
         dataset=config.dataset.dataset_name,
         model_name=config.model_type,
+        log=log,
     ).get_data()
 
     ###########################################
@@ -63,6 +76,7 @@ def main(config):
                 log=log,
                 save_path=save_path,
                 seeds=seeds,
+                Logger=Logger,
             )
         elif config.dataset.task == "LinkPrediction":
             mlp_LinkPrediction(
@@ -72,6 +86,7 @@ def main(config):
                 log=log,
                 save_path=save_path,
                 seeds=seeds,
+                Logger=Logger,
             )
 
     ###########################################
@@ -112,6 +127,7 @@ def main(config):
                 log=log,
                 save_path=save_path,
                 seeds=seeds,
+                Logger=Logger,
             )
         elif config.dataset.task == "LinkPrediction":
             GNN_link_trainer(
@@ -120,6 +136,7 @@ def main(config):
                 training_args=training_args,
                 save_path=save_path,
                 log=log,
+                Logger=Logger,
             )
 
     ###########################################
@@ -127,7 +144,11 @@ def main(config):
     ###########################################
     elif config.model_type == "Shallow":
         Trainer = ShallowTrainer(
-            config=config, training_args=training_args, save_path=save_path, log=log
+            config=config,
+            training_args=training_args,
+            save_path=save_path,
+            log=log,
+            Logger=Logger,
         )
         Trainer.fit(dataset=dataset, seeds=seeds)
 
@@ -142,7 +163,8 @@ def main(config):
             f"The specified model type, {config.model_type} is not yet supported."
         )
 
-    # if config.debug:
+    if config.debug:
+        print(Logger.saved_values)
 
 
 if __name__ == "__main__":

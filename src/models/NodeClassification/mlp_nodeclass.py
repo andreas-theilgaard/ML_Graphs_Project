@@ -2,12 +2,13 @@ from src.models.NodeClassification.mlp import MLP_model
 from ogb.nodeproppred import Evaluator
 import torch
 import numpy as np
-from src.models.logger import LoggerClass
 from src.models.utils import set_seed
 from src.models.utils import prepare_metric_cols
 
 
-def mlp_node_classification(dataset, config, training_args, log, save_path, seeds):
+def mlp_node_classification(
+    dataset, config, training_args, log, save_path, seeds, Logger
+):
     data = dataset[0]
     split_idx = dataset.get_idx_split()
 
@@ -36,13 +37,6 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
     y = data.y.to(config.device)
 
     evaluator = Evaluator(name=config.dataset.dataset_name)
-
-    Logger = LoggerClass(
-        runs=len(seeds),
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        seeds=seeds,
-        log=log,
-    )
 
     for seed in seeds:
         set_seed(seed=seed)

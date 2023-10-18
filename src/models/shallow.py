@@ -73,11 +73,12 @@ class ShallowModel(nn.Module):
 
 
 class ShallowTrainer:
-    def __init__(self, config, training_args, save_path, log):
+    def __init__(self, config, training_args, save_path, log, Logger):
         self.config = config
         self.training_args = training_args
         self.save_path = save_path
         self.log = log
+        self.Logger = Logger
 
     def metrics(self, pred, label, type="accuracy"):
         if type == "accuracy":
@@ -183,4 +184,4 @@ class ShallowTrainer:
         self.log.info(
             f"Embeddings have been saved at {self.embedding_save_path} you can now use them for any downstream task"
         )
-        return loss
+        self.Logger.save_value({"loss": loss, "acc": acc})

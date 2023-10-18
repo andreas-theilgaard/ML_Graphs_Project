@@ -78,7 +78,7 @@ def get_k_laplacian_eigenvectors(
     Return:
         k first non-trivial eigenvectors
     """
-    print("Getting Laplacian eigenvectors")
+    # print("Getting Laplacian eigenvectors")
     num_nodes = dataset.num_nodes
     is_undirected = True
     if for_link:
@@ -113,5 +113,5 @@ def get_k_laplacian_eigenvectors(
     eig_vecs = np.real(eig_vecs[:, eig_vals.argsort()])
     # exclude first trivial eigenvector
     eigen_vectors = torch.from_numpy(eig_vecs[:, 1 : k + 1])
-    print("Returning Laplacian eigenvectors")
+    # print("Returning Laplacian eigenvectors")
     return eigen_vectors

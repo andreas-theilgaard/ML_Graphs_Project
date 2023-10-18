@@ -214,9 +214,10 @@ class MLP_LinkPrediction:
                     ]
                 )
             )
+        self.logger.save_value({"loss": loss, "hits@50": results["hits@50"][2]})
 
 
-def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds):
+def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
     split_edge = dataset.get_edge_split()
 
@@ -244,13 +245,6 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds):
     X = x.to(config.device)
 
     evaluator = Evaluator(name=config.dataset.dataset_name)
-
-    Logger = LoggerClass(
-        runs=len(seeds),
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        seeds=seeds,
-        log=log,
-    )
 
     for seed in seeds:
         set_seed(seed=seed)

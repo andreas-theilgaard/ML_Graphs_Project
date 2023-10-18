@@ -127,3 +127,4 @@ class MLP_model:
         self.log.info(
             f"Finished training - Train Loss: {loss}, Train Acc.: {result[0]}, Val Acc.: {result[1]}, Test Acc.{result[-1]}"
         )
+        self.logger.save_value({"loss": loss, "Test acc": result[-1]})

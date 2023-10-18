@@ -96,3 +96,4 @@ target/
 /outputs
 *.pth
 *old_shallow.py
+/playground

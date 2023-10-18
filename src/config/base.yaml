@@ -11,4 +11,4 @@ hydra:
 model_type: Shallow
 device: 'cpu'
 runs: 1
-debug: True
+debug: False

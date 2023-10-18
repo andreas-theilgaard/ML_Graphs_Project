@@ -26,8 +26,9 @@ class LoggerClass(object):
     def end_run(self):
         self.results = pd.concat([self.results, pd.DataFrame(self.X)])
 
-    def save_value(self, key, value):
-        self.saved_values[key] = value
+    def save_value(self, values: dict):
+        for key in values.keys():
+            self.saved_values[key] = values[key]
 
     def save_results(self, save_path):
         self.results.columns = self.metrics + ["Run"]

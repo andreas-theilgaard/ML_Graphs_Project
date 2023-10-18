@@ -11,10 +11,12 @@ class DataLoader:
         model_name: str,
         task_type: str = "NodeClassification",
         dataset: str = "ogbn-arxiv",
+        log=None,
     ):
         self.task_type = task_type
         self.dataset = dataset
         self.model_name = model_name
+        self.log = log
         self.assert_arguments()
 
     def assert_arguments(self):
@@ -66,7 +68,7 @@ class DataLoader:
     Number of edges: {data.num_edges} \n
     Is undirected: {data.is_undirected()}
             """
-        print(summary)
+        self.log.info(summary)
 
     def get_data(self):
         if self.task_type == "NodeClassification":
