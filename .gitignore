@@ -98,3 +98,8 @@ target/
 *old_shallow.py
 /playground
 *results.json
+*experiments.py
+/experiment_results
+*.err
+*.sh
+*.out

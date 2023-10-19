@@ -118,7 +118,6 @@ def train(model, predictor, data, split_edge, optimizer, batch_size):
         num_examples = pos_out.size(0)
         total_loss += loss.item() * num_examples
         total_examples += num_examples
-        print(total_loss, total_examples)
 
     return total_loss / total_examples
 
@@ -269,9 +268,9 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train Acc.": results["hits@50"][0],
-                    "Val Acc.": results["hits@50"][1],
-                    "Test Acc.": results["hits@50"][2],
+                    "Train hits@50.": results["hits@50"][0],
+                    "Val hits@50.": results["hits@50"][1],
+                    "Test hits@50.": results["hits@50"][2],
                 }
             )
             Logger.add_to_run(
@@ -279,12 +278,13 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             )
         Logger.end_run()
 
-        Logger.save_results(save_path + "/results.json")
-        Logger.get_statistics(
-            metrics=prepare_metric_cols(config.dataset.metrics),
-            directions=["-", "+", "+", "+"],
-        )
-        Logger.save_value({"loss": loss, "hits@50": results["hits@50"][2]})
+        model_save_path = save_path + f"/model_{seed}.pth"
+        log.info(f"saved model at {model_save_path}")
+        torch.save(model.state_dict(), model_save_path)
 
-    model.train()
-    torch.save(model.state_dict(), save_path + "/model.pth")
+    Logger.save_results(save_path + "/results.json")
+    Logger.get_statistics(
+        metrics=prepare_metric_cols(config.dataset.metrics),
+        directions=["-", "+", "+", "+"],
+    )
+    Logger.save_value({"loss": loss, "hits@50": results["hits@50"][2]})

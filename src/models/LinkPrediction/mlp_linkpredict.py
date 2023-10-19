@@ -179,9 +179,9 @@ class MLP_LinkPrediction:
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train Acc.": results["hits@50"][0],
-                    "Val Acc.": results["hits@50"][1],
-                    "Test Acc.": results["hits@50"][2],
+                    "Train hits@50.": results["hits@50"][0],
+                    "Val hits@50.": results["hits@50"][1],
+                    "Test hits@50.": results["hits@50"][2],
                 }
             )
             self.logger.add_to_run(

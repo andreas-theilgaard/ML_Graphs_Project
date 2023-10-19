@@ -86,6 +86,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
     evaluator = Evaluator(name=config.dataset.dataset_name)
     data.adj_t = data.adj_t.to_symmetric()
+    data = data.to(config.device)
     split_idx = dataset.get_idx_split()
     # model.reset_parameters()
     train_idx = split_idx["train"].to(config.device)
@@ -102,7 +103,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
             num_layers=training_args.num_layers,
         )
         model = GNN_object.get_gnn_model()
-        model.to(config.device)
+        model = model.to(config.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=training_args.lr)
         prog_bar = tqdm(range(training_args.epochs))
 
@@ -121,15 +122,16 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
             if epoch % 10 == 0:
                 log.info(f"Train: {100*train_acc}, Valid: {100*valid_acc}, Test: {100*test_acc}")
             Logger.add_to_run(np.array([loss, train_acc, valid_acc, test_acc]))
+        Logger.end_run()
+        model.train()
 
-    Logger.end_run()
+        model_save_path = save_path + f"/model_{seed}.pth"
+        log.info(f"saved model at {model_save_path}")
+        torch.save(model.state_dict(), model_save_path)
+
     Logger.save_value({"loss": loss, "acc": test_acc})
     Logger.save_results(save_path + "/results.json")
     Logger.get_statistics(
         metrics=prepare_metric_cols(config.dataset.metrics),
         directions=["-", "+", "+", "+"],
     )
-
-    model.train()
-    log.info(f"saved model at {save_path+'/model.pth'}")
-    torch.save(model.state_dict(), save_path + "/model.pth")
