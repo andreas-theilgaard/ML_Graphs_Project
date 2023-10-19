@@ -54,6 +54,7 @@ class MLP_model:
         num_layers: int,
         dropout: float,
         log,
+        logger,
     ):
         self.device = device
         self.model = NodeClassifier(
@@ -65,6 +66,7 @@ class MLP_model:
         )
         self.model.to(device)
         self.log = log
+        self.logger = logger
 
     def train(self, X, y, train_idx, optimizer):
         self.model.train()
@@ -86,28 +88,26 @@ class MLP_model:
                     "y_true": y[split_idx["train"]],
                     "y_pred": y_hat[split_idx["train"]],
                 }
-            )["acc"]
+            )[evaluator.eval_metric]
 
             valid_acc = evaluator.eval(
                 {
                     "y_true": y[split_idx["valid"]],
                     "y_pred": y_hat[split_idx["valid"]],
                 }
-            )["acc"]
+            )[evaluator.eval_metric]
 
             test_acc = evaluator.eval(
                 {
                     "y_true": y[split_idx["test"]],
                     "y_pred": y_hat[split_idx["test"]],
                 }
-            )["acc"]
+            )[evaluator.eval_metric]
 
         return train_acc, valid_acc, test_acc
 
     def fit(self, X, y, epochs: int, split_idx, evaluator, lr):
         # self.model.reset_parameters()
-        save_results = np.zeros((epochs, 4))
-
         train_idx = split_idx["train"].to(self.device)
         prog_bar = tqdm(range(epochs))
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
@@ -122,8 +122,9 @@ class MLP_model:
                     "Test Acc.": result[-1],
                 }
             )
-            save_results[i, :] = loss, result[0], result[1], result[-1]
+            self.logger.add_to_run(np.array([loss, result[0], result[1], result[-1]]))
+
         self.log.info(
             f"Finished training - Train Loss: {loss}, Train Acc.: {result[0]}, Val Acc.: {result[1]}, Test Acc.{result[-1]}"
         )
-        return save_results
+        self.logger.save_value({"loss": loss, "Test acc": result[-1]})

@@ -8,6 +8,12 @@ GraphSage_node_classification = np.load(
     "outputs/NodeClassification/ogbn-arxiv/GNN/2023-10-10/18-26-36/results.npy"
 )
 
+import numpy as np
+
+X = np.load(
+    "outputs/LinkPrediction/ogbl-collab/DownStream/2023-10-11/08-25-38/results.npy"
+)
+round(X[-1, -1], 4)
 
 if __name__ == "__main__":
     print("Node Classification ogbn-arxiv:")

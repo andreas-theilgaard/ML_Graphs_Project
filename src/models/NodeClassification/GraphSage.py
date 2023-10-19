@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
-import torch_geometric.transforms as T
-from torch_geometric.nn import GCNConv, SAGEConv
+from torch_geometric.nn import SAGEConv
 
 
 class SAGE(torch.nn.Module):
@@ -32,4 +31,6 @@ class SAGE(torch.nn.Module):
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.convs[-1](x, adj_t)
-        return x  # x.log_softmax(dim=-1)
+        return x.log_softmax(
+            dim=-1
+        )  # make such that not return log probabilites but x instead, also make such that no classification head is returned

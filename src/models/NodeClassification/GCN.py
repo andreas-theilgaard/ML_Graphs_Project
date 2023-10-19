@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
-import torch_geometric.transforms as T
-from torch_geometric.nn import GCNConv, SAGEConv
+from torch_geometric.nn import GCNConv
 
 
 class GCN(torch.nn.Module):

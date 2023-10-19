@@ -95,3 +95,6 @@ target/
 *ged.py
 /outputs
 *.pth
+*old_shallow.py
+/playground
+*results.json

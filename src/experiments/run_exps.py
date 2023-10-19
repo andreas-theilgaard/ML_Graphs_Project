@@ -1,63 +1,100 @@
 import hydra
 from omegaconf import OmegaConf
 import logging
-import torch
 from src.data.get_data import DataLoader
-from src.models.mlp_nodeclass import mlp_node_classification
-from src.models.mlp_linkpredict import mlp_LinkPrediction
-from src.models.EmbeddingNetworks.Node2Vec import Node2Vec
-from src.models.GNN.GNN import GNN_trainer
-from src.models.GNN.GNN_link import GNN_link_trainer
 from torch_geometric.utils import to_undirected
-import random
+from src.models.utils import get_seeds
+from src.models.logger import LoggerClass
+from src.models.utils import prepare_metric_cols
+import sys
+
+# Node Classification
+from src.models.NodeClassification.mlp_nodeclass import mlp_node_classification
+from src.models.NodeClassification.GNN import GNN_trainer
+
+# Link Prediction
+# from src.models.mlp_linkpredict import mlp_LinkPrediction
+from src.models.LinkPrediction.mlp_linkpredict import mlp_LinkPrediction
+from src.models.LinkPrediction.GNN_link import GNN_link_trainer
+
+# Embeddings
+from src.models.Node2Vec import Node2Vec
+from src.models.shallow import ShallowTrainer
+
 
 log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
-@hydra.main(version_base="1.2", config_path="../config")
+@hydra.main(version_base="1.2", config_path="../config", config_name="base.yaml")
 def main(config):
-    log.info(f"Starting run ... on {config.device}")
-    print(
-        f"\nConfigurations for current run:\n\nConfiguration: \n {OmegaConf.to_yaml(config)}"
-    )
-    hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
-    training_args = config.model.training
-    save_path = hydra_cfg["runtime"]["output_dir"]
-    # seed initailization
-    random.seed(config.seed)
-    torch.manual_seed(config.seed)
-    torch.cuda.manual_seed_all(config.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    """
+    This script is used for running all the experiments regarding this project.
 
+    args:
+        - config:
+          yaml config file, please specify by using the --config-name flag
+    """
+    if config.debug:
+        log.setLevel(logging.CRITICAL + 1)
+
+    log.info(f"Starting experiment ... on {config.device}")
+    log.info(f"\nConfigurations for current experiment:\n\nConfiguration: \n {OmegaConf.to_yaml(config)}")
+    hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
+    model_args = config.dataset[config.model_type]
+    training_args = model_args.training
+    save_path = hydra_cfg["runtime"]["output_dir"]
+
+    # get seeds
+    seeds = get_seeds(config.runs)
+    Logger = LoggerClass(
+        runs=len(seeds),
+        metrics=prepare_metric_cols(config.dataset.metrics),
+        seeds=seeds,
+        log=log,
+    )
+
+    # get data
     dataset = DataLoader(
-        task_type=config.task,
-        dataset=config.dataset,
-        model_name=config.model.model_name,
+        task_type=config.dataset.task,
+        dataset=config.dataset.dataset_name,
+        model_name=config.model_type,
+        log=log,
     ).get_data()
 
-    if config.model.model_name == "DownStream":
-        if config.task == "NodeClassification":
+    ###########################################
+    # Downstream
+    ###########################################
+    if config.model_type == "DownStream":
+        if config.dataset.task == "NodeClassification":
             mlp_node_classification(
                 dataset=dataset,
                 config=config,
                 training_args=training_args,
                 log=log,
                 save_path=save_path,
+                seeds=seeds,
+                Logger=Logger,
             )
-        elif config.task == "LinkPrediction":
+        elif config.dataset.task == "LinkPrediction":
             mlp_LinkPrediction(
                 dataset=dataset,
                 config=config,
                 training_args=training_args,
                 log=log,
                 save_path=save_path,
+                seeds=seeds,
+                Logger=Logger,
             )
 
-    elif config.model.model_name == "Node2Vec":
+    ###########################################
+    # Node2Vec
+    ###########################################
+    elif config.model_type == "Node2Vec":
         data = dataset[0]
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index, num_nodes=data.num_nodes)
+        # If LinkPrediciton should problably do some more here
         model = Node2Vec(
             edge_index=data.edge_index,
             device=config.device,
@@ -75,23 +112,56 @@ def main(config):
             lr=training_args.lr,
             num_workers=training_args.num_workers,
         )
-    elif config.model.model_name == "GNN":
-        if config.task == "NodeClassification":
-            GNN_trainer(dataset, config, training_args, save_path, log)
-        elif config.task == "LinkPrediction":
+
+    ###########################################
+    # GNN
+    ###########################################
+    elif config.model_type == "GNN":
+        if config.dataset.task == "NodeClassification":
+            GNN_trainer(
+                dataset=dataset,
+                config=config,
+                training_args=training_args,
+                log=log,
+                save_path=save_path,
+                seeds=seeds,
+                Logger=Logger,
+            )
+        elif config.dataset.task == "LinkPrediction":
             GNN_link_trainer(
                 dataset=dataset,
                 config=config,
                 training_args=training_args,
                 save_path=save_path,
+                seeds=seeds,
                 log=log,
+                Logger=Logger,
             )
 
-    elif config.model.model_name == "Shallow":
+    ###########################################
+    # Shallow
+    ###########################################
+    elif config.model_type == "Shallow":
+        Trainer = ShallowTrainer(
+            config=config,
+            training_args=training_args,
+            save_path=save_path,
+            log=log,
+            Logger=Logger,
+        )
+        Trainer.fit(dataset=dataset, seeds=seeds)
+
+    ###########################################
+    # Combined
+    ###########################################
+    elif config.model_type == "Combined":
         print("not implemented yet")
 
-    elif config.model.model_name == "Combined":
-        print("not implemented yet")
+    else:
+        raise ValueError(f"The specified model type, {config.model_type} is not yet supported.")
+
+    if config.debug:
+        print(Logger.saved_values)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import torch_geometric.transforms as T
 from torch_geometric.nn import GCNConv, SAGEConv
 from ogb.linkproppred import Evaluator
 from tqdm import tqdm
+from src.models.utils import set_seed, prepare_metric_cols
 
 
 class SAGE(torch.nn.Module):
@@ -18,6 +19,31 @@ class SAGE(torch.nn.Module):
         for _ in range(num_layers - 2):
             self.convs.append(SAGEConv(hidden_channels, hidden_channels))
         self.convs.append(SAGEConv(hidden_channels, out_channels))
+
+        self.dropout = dropout
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+
+    def forward(self, x, adj_t):
+        for conv in self.convs[:-1]:
+            x = conv(x, adj_t)
+            x = F.relu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.convs[-1](x, adj_t)
+        return x
+
+
+class GCN(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
+        super(GCN, self).__init__()
+
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(GCNConv(in_channels, hidden_channels, cached=True))
+        for _ in range(num_layers - 2):
+            self.convs.append(GCNConv(hidden_channels, hidden_channels, cached=True))
+        self.convs.append(GCNConv(hidden_channels, out_channels, cached=True))
 
         self.dropout = dropout
 
@@ -78,12 +104,9 @@ def train(model, predictor, data, split_edge, optimizer, batch_size):
         pos_loss = -torch.log(pos_out + 1e-15).mean()
 
         # Just do some trivial random sampling.
-        edge = torch.randint(
-            0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device
-        )
+        edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
         neg_out = predictor(h[edge[0]], h[edge[1]])
         neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
-
         loss = pos_loss + neg_loss
         loss.backward()
 
@@ -95,6 +118,7 @@ def train(model, predictor, data, split_edge, optimizer, batch_size):
         num_examples = pos_out.size(0)
         total_loss += loss.item() * num_examples
         total_examples += num_examples
+        print(total_loss, total_examples)
 
     return total_loss / total_examples
 
@@ -166,18 +190,18 @@ def test(model, predictor, data, split_edge, evaluator, batch_size):
             }
         )[f"hits@{K}"]
 
-        results[f"Hits@{K}"] = (train_hits, valid_hits, test_hits)
+        results[f"hits@{K}"] = (train_hits, valid_hits, test_hits)
 
     return results
 
 
-def GNN_link_trainer(dataset, config, training_args, save_path, log):
+def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger=None, seeds=None):
     data = dataset[0]
     edge_index = data.edge_index
     data.edge_weight = data.edge_weight.view(-1).to(torch.float)
     data = T.ToSparseTensor()(data)
     split_edge = dataset.get_edge_split()
-    evaluator = Evaluator(name=config.dataset)
+    evaluator = Evaluator(name=config.dataset.dataset_name)
 
     if training_args.use_valedges:
         val_edge_index = split_edge["valid"]["edge"].t()
@@ -189,60 +213,78 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log):
 
     data = data.to(config.device)
 
-    model = SAGE(
-        in_channels=data.num_features,
-        hidden_channels=training_args.hidden_channels,
-        num_layers=training_args.num_layers,
-        dropout=training_args.dropout,
-        out_channels=training_args.hidden_channels,
-    ).to(config.device)
-    predictor = LinkPredictor(
-        in_channels=training_args.hidden_channels,
-        hidden_channels=training_args.hidden_channels,
-        out_channels=1,
-        num_layers=training_args.num_layers,
-        dropout=training_args.dropout,
-    ).to(config.device)
+    for seed in seeds:
+        set_seed(seed)
+        Logger.start_run()
 
-    optimizer = torch.optim.Adam(
-        list(model.parameters()) + list(predictor.parameters()), lr=training_args.lr
-    )
-    prog_bar = tqdm(range(training_args.epochs))
-    save_results = np.zeros((training_args.epochs, 4))
+        if config.dataset.GNN.model == "GraphSage":
+            model = SAGE(
+                in_channels=data.num_features,
+                hidden_channels=training_args.hidden_channels,
+                num_layers=training_args.num_layers,
+                dropout=training_args.dropout,
+                out_channels=training_args.hidden_channels,
+            ).to(config.device)
+        elif config.dataset.GNN.model == "GCN":
+            model = GCN(
+                in_channels=data.num_features,
+                hidden_channels=training_args.hidden_channels,
+                num_layers=training_args.num_layers,
+                dropout=training_args.dropout,
+                out_channels=training_args.hidden_channels,
+            ).to(config.device)
+        else:
+            raise ValueError(f"Model {config.dataset.GNN.model} not implemented")
 
-    for i, epoch in enumerate(prog_bar):
-        loss = train(
-            model=model,
-            predictor=predictor,
-            data=data,
-            split_edge=split_edge,
-            optimizer=optimizer,
-            batch_size=training_args.batch_size,
-        )
-        results = test(
-            model=model,
-            predictor=predictor,
-            data=data,
-            split_edge=split_edge,
-            evaluator=evaluator,
-            batch_size=training_args.batch_size,
-        )
-        prog_bar.set_postfix(
-            {
-                "Train Loss": loss,
-                "Train Acc.": results["Hits@50"][0],
-                "Val Acc.": results["Hits@50"][1],
-                "Test Acc.": results["Hits@50"][2],
-            }
-        )
-        save_results[i, :] = (
-            loss,
-            results["Hits@50"][0],
-            results["Hits@50"][1],
-            results["Hits@50"][2],
-        )
+        predictor = LinkPredictor(
+            in_channels=training_args.hidden_channels,
+            hidden_channels=training_args.hidden_channels,
+            out_channels=1,
+            num_layers=training_args.num_layers,
+            dropout=training_args.dropout,
+        ).to(config.device)
 
-    np.save(save_path + "/results.npy", save_results)
-    np.save(save_path + "/results.npy", save_results)
+        optimizer = torch.optim.Adam(
+            list(model.parameters()) + list(predictor.parameters()), lr=training_args.lr
+        )
+        prog_bar = tqdm(range(training_args.epochs))
+
+        for i, epoch in enumerate(prog_bar):
+            loss = train(
+                model=model,
+                predictor=predictor,
+                data=data,
+                split_edge=split_edge,
+                optimizer=optimizer,
+                batch_size=training_args.batch_size,
+            )
+            results = test(
+                model=model,
+                predictor=predictor,
+                data=data,
+                split_edge=split_edge,
+                evaluator=evaluator,
+                batch_size=training_args.batch_size,
+            )
+            prog_bar.set_postfix(
+                {
+                    "Train Loss": loss,
+                    "Train Acc.": results["hits@50"][0],
+                    "Val Acc.": results["hits@50"][1],
+                    "Test Acc.": results["hits@50"][2],
+                }
+            )
+            Logger.add_to_run(
+                np.array([loss, results["hits@50"][0], results["hits@50"][1], results["hits@50"][2]])
+            )
+        Logger.end_run()
+
+        Logger.save_results(save_path + "/results.json")
+        Logger.get_statistics(
+            metrics=prepare_metric_cols(config.dataset.metrics),
+            directions=["-", "+", "+", "+"],
+        )
+        Logger.save_value({"loss": loss, "hits@50": results["hits@50"][2]})
+
     model.train()
     torch.save(model.state_dict(), save_path + "/model.pth")
