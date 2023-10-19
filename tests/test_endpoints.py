@@ -31,8 +31,8 @@ endpoints = {
             "GCN": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=10 dataset.GNN.model='GCN'",
         },
         "LinkPrediction": {
-            "GraphSage": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=10 dataset.GNN.model='GraphSage'",
-            "GCN": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=10 dataset.GNN.model='GCN'",
+            "GraphSage": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=2 dataset.GNN.model='GraphSage'",
+            "GCN": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=2 dataset.GNN.model='GCN'",
         },
     },
 }
@@ -158,13 +158,11 @@ def test_shallow_linkprediction():
 # def test_gnn_linkprediction():
 #     completed_process = subprocess.run(endpoints['GNN']['LinkPrediction']['GraphSage'], capture_output=True, shell=True,text=True, check=True)
 #     output = completed_process.stdout
-#     output = ast.literal_eval(output)
-#     assert output['loss'] == 1.4672894477844238
-#     assert output['acc'] == 0.5953953459662984
+#     output = ast.literal_eval(output) #1.0114138905597612
+#     assert output['loss'] == 1.0102661845384884
+#     assert output['hits@50'] == 0.006259578233935548
 #     completed_process = subprocess.run(endpoints['GNN']['LinkPrediction']['GCN'], capture_output=True, shell=True,text=True, check=True)
 #     output = completed_process.stdout
 #     output = ast.literal_eval(output)
-#     print(output)
-
-# if __name__ == "__main__":
-#     test_gnn_classification()
+#     assert output['loss'] == 1.0085030351438709
+#     assert output['hits@50'] == 0.033067840877204345

@@ -15,7 +15,7 @@ from src.models.NodeClassification.GNN import GNN_trainer
 # Link Prediction
 # from src.models.mlp_linkpredict import mlp_LinkPrediction
 from src.models.LinkPrediction.mlp_linkpredict import mlp_LinkPrediction
-from src.models.GNN.GNN_link import GNN_link_trainer
+from src.models.LinkPrediction.GNN_link import GNN_link_trainer
 
 # Embeddings
 from src.models.Node2Vec import Node2Vec
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-@hydra.main(version_base="1.2", config_path="../config")
+@hydra.main(version_base="1.2", config_path="../config", config_name="base.yaml")
 def main(config):
     """
     This script is used for running all the experiments regarding this project.
@@ -39,9 +39,7 @@ def main(config):
         log.setLevel(logging.CRITICAL + 1)
 
     log.info(f"Starting experiment ... on {config.device}")
-    log.info(
-        f"\nConfigurations for current experiment:\n\nConfiguration: \n {OmegaConf.to_yaml(config)}"
-    )
+    log.info(f"\nConfigurations for current experiment:\n\nConfiguration: \n {OmegaConf.to_yaml(config)}")
     hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
     model_args = config.dataset[config.model_type]
     training_args = model_args.training
@@ -135,6 +133,7 @@ def main(config):
                 config=config,
                 training_args=training_args,
                 save_path=save_path,
+                seeds=seeds,
                 log=log,
                 Logger=Logger,
             )
@@ -159,9 +158,7 @@ def main(config):
         print("not implemented yet")
 
     else:
-        raise ValueError(
-            f"The specified model type, {config.model_type} is not yet supported."
-        )
+        raise ValueError(f"The specified model type, {config.model_type} is not yet supported.")
 
     if config.debug:
         print(Logger.saved_values)

@@ -97,3 +97,4 @@ target/
 *.pth
 *old_shallow.py
 /playground
+*results.json

@@ -7,6 +7,24 @@ from src.models.utils import prepare_metric_cols
 
 
 def mlp_node_classification(dataset, config, training_args, log, save_path, seeds, Logger):
+    """
+    Function that instanties and runs a MLP model for the node classification task
+
+    args:
+        dataset:
+            torch geometric dataset
+        config:
+            config form yaml file
+        training_args:
+            traning arguments from config, used for shorten the reference to these args
+        save_path:
+            path to the current hydra folder
+        seeds:
+            list of seeds that will be used for the current experiment
+        Logger:
+            the Logger class as defined in src/models/logger.py
+
+    """
     data = dataset[0]
     split_idx = dataset.get_idx_split()
 

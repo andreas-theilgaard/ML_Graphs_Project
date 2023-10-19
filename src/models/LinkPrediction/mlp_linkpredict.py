@@ -8,6 +8,7 @@ from ogb.linkproppred import Evaluator
 from src.models.logger import LoggerClass
 from src.models.utils import set_seed
 from src.models.utils import prepare_metric_cols
+from torch_geometric.utils import negative_sampling
 
 
 class LinkPredictor(nn.Module):
@@ -75,37 +76,19 @@ class MLP_LinkPrediction:
 
         positive_edges = split_edge["train"]["edge"].to(self.device)
         total_loss, total_examples = 0, 0
-        loss_fn = torch.nn.BCELoss()
+        loss_fn = nn.BCELoss()
 
-        for perm in DataLoader(
-            range(positive_edges.size(0)), batch_size=batch_size, shuffle=True
-        ):
+        for perm in DataLoader(range(positive_edges.size(0)), batch_size=batch_size, shuffle=True):
             optimizer.zero_grad()
             pos_edge = positive_edges[perm].t()
 
             # option 1
             positive_preds = self.model(X[pos_edge[0]], X[pos_edge[1]])
             pos_loss = -torch.log(positive_preds + 1e-15).mean()
-            neg_edge = torch.randint(
-                0, X.size(0), pos_edge.size(), dtype=torch.long, device=self.device
-            )
+            neg_edge = torch.randint(0, X.size(0), pos_edge.size(), dtype=torch.long, device=self.device)
             neg_preds = self.model(X[neg_edge[0]], X[neg_edge[1]])
             neg_loss = -torch.log(1 - neg_preds + 1e-15).mean()
             loss = pos_loss + neg_loss
-
-            # option 2
-            # neg_edge = torch.randint(0,X.size(0),pos_edge.size(),dtype=torch.long,device=self.device)
-            # all_edges = torch.cat([pos_edge,neg_edge],dim=1)
-            # labels = torch.cat([torch.ones(pos_edge.size(1)), torch.zeros(neg_edge.size(1))], dim=0)
-            # preds = self.model(X[all_edges[0]],X[all_edges[1]])
-            # loss = loss_fn(preds.squueze(0),labels)
-
-            # option 3
-            # neg_edge = negative_sampling(pos_edge, num_nodes=X.size(0), num_neg_samples=pos_edge.shape[0])
-            # all_edges = torch.cat([pos_edge,neg_edge],dim=1)
-            # labels = torch.cat([torch.ones(pos_edge.size(1)), torch.zeros(neg_edge.size(1))], dim=0)
-            # preds = self.model(X[all_edges[0]],X[all_edges[1]])
-            # loss = loss_fn(preds.squueze(0),labels)
 
             loss.backward()
             optimizer.step()
@@ -113,7 +96,6 @@ class MLP_LinkPrediction:
             num_examples = positive_preds.size(0)
             total_loss += loss.item() * num_examples
             total_examples += num_examples
-
         return total_loss / total_examples
 
     @torch.no_grad()
@@ -193,9 +175,7 @@ class MLP_LinkPrediction:
 
         for i, epoch in enumerate(prog_bar):
             loss = self.train(X, split_edge, optimizer, batch_size)
-            results = self.test(
-                X, split_edge=split_edge, evaluator=evaluator, batch_size=batch_size
-            )
+            results = self.test(X, split_edge=split_edge, evaluator=evaluator, batch_size=batch_size)
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
@@ -225,17 +205,13 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         config.dataset[config.model_type].saved_embeddings
         and config.dataset[config.model_type].using_features
     ):
-        embedding = torch.load(
-            config.model.saved_embeddings, map_location=config.device
-        )
+        embedding = torch.load(config.model.saved_embeddings, map_location=config.device)
         x = torch.cat([data.x, embedding], dim=-1)
     if (
         config.dataset[config.model_type].saved_embeddings
         and not config.dataset[config.model_type].using_features
     ):
-        embedding = torch.load(
-            config.model.saved_embeddings, map_location=config.device
-        )
+        embedding = torch.load(config.model.saved_embeddings, map_location=config.device)
         x = embedding
     if (
         not config.dataset[config.model_type].saved_embeddings
