@@ -1,6 +1,6 @@
 import torch
-from src.models.GNN.GCN import GCN
-from src.models.GNN.GraphSage import SAGE
+from src.models.NodeClassification.GCN import GCN
+from src.models.NodeClassification.GraphSage import SAGE
 import torch.nn.functional as F
 from ogb.nodeproppred import Evaluator
 from tqdm import tqdm
@@ -67,17 +67,17 @@ class GNN:
         y_true_valid = data.y[split_idx["valid"]]
         y_true_test = data.y[split_idx["test"]]
 
-        train_acc = evaluator.eval(
-            {"y_true": y_true_train, "y_pred": y_pred[split_idx["train"]]}
-        )[evaluator.eval_metric]
+        train_acc = evaluator.eval({"y_true": y_true_train, "y_pred": y_pred[split_idx["train"]]})[
+            evaluator.eval_metric
+        ]
 
-        valid_acc = evaluator.eval(
-            {"y_true": y_true_valid, "y_pred": y_pred[split_idx["valid"]]}
-        )[evaluator.eval_metric]
+        valid_acc = evaluator.eval({"y_true": y_true_valid, "y_pred": y_pred[split_idx["valid"]]})[
+            evaluator.eval_metric
+        ]
 
-        test_acc = evaluator.eval(
-            {"y_true": y_true_test, "y_pred": y_pred[split_idx["test"]]}
-        )[evaluator.eval_metric]
+        test_acc = evaluator.eval({"y_true": y_true_test, "y_pred": y_pred[split_idx["test"]]})[
+            evaluator.eval_metric
+        ]
 
         return train_acc, valid_acc, test_acc
 
@@ -119,9 +119,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
                 }
             )
             if epoch % 10 == 0:
-                log.info(
-                    f"Train: {100*train_acc}, Valid: {100*valid_acc}, Test: {100*test_acc}"
-                )
+                log.info(f"Train: {100*train_acc}, Valid: {100*valid_acc}, Test: {100*test_acc}")
             Logger.add_to_run(np.array([loss, train_acc, valid_acc, test_acc]))
 
     Logger.end_run()
