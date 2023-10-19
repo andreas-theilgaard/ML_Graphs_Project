@@ -6,6 +6,7 @@ from src.models.utils import set_seed, get_k_laplacian_eigenvectors
 import networkx as nx
 from tqdm import tqdm
 import hydra
+import numpy as np
 
 
 def decoder(decode_type, beta, z_i, z_j):
@@ -17,30 +18,22 @@ def decoder(decode_type, beta, z_i, z_j):
         raise ValueError("Decoder method not yet implemented")
 
 
-def initialize_embeddings(
-    data, dataset=None, method="random", dim: int = 8, for_link=False
-):
+def initialize_embeddings(data, dataset=None, method="random", dim: int = 8, for_link=False):
     num_nodes = dataset.num_nodes
 
     if method == "random":
         return torch.rand((num_nodes, dim))
     elif method == "nodestatistics":
         G = nx.from_edgelist(data.edge_index.numpy().T)
-        degrees = torch.tensor([deg for _, deg in G.degree()], dtype=torch.float).view(
-            -1, 1
-        )
-        centrality = torch.tensor(
-            list(nx.eigenvector_centrality(G).values()), dtype=torch.float
-        ).view(-1, 1)
+        degrees = torch.tensor([deg for _, deg in G.degree()], dtype=torch.float).view(-1, 1)
+        centrality = torch.tensor(list(nx.eigenvector_centrality(G).values()), dtype=torch.float).view(-1, 1)
         X = torch.cat([degrees, centrality], dim=1)
         extras = dim - 2
         if extras > 0:
             extra_features = torch.rand((num_nodes, extras))
         return torch.cat([X, extra_features], dim=1)
     elif method == "laplacian":
-        return get_k_laplacian_eigenvectors(
-            data=data, dataset=dataset, k=dim, for_link=for_link
-        )
+        return get_k_laplacian_eigenvectors(data=data, dataset=dataset, k=dim, for_link=for_link)
     else:
         raise ValueError(f"method: {method} not implemented yet")
 
@@ -56,14 +49,10 @@ class ShallowModel(nn.Module):
         device="cpu",
     ):
         super(ShallowModel, self).__init__()
-        self.embeddings = nn.Embedding(
-            num_nodes, embedding_dim, _weight=init_embeddings
-        ).to(device)
+        self.embeddings = nn.Embedding(num_nodes, embedding_dim, _weight=init_embeddings).to(device)
         self.decoder_type = decoder_type
         # make β as a trainable parameter
-        self.beta = (
-            nn.Parameter(torch.tensor(beta)) if decoder_type in ["dist"] else None
-        )
+        self.beta = nn.Parameter(torch.tensor(beta)) if decoder_type in ["dist"] else None
 
     def forward(self, node_i, node_j):
         z_i = self.embeddings(node_i)
@@ -86,35 +75,27 @@ class ShallowTrainer:
             return torch.mean((yhat == label).float()).item()
 
     def get_negative_samples(self, edge_index, num_nodes, num_neg_samples):
-        return negative_sampling(
-            edge_index, num_neg_samples=num_neg_samples, num_nodes=num_nodes
-        )
+        return negative_sampling(edge_index, num_neg_samples=num_neg_samples, num_nodes=num_nodes)
 
     def train(self, model, data, dataset, criterion, optimizer):
         model.train()
         optimizer.zero_grad()
 
         # Positive edges
-        pos_edge_index = (
-            data.edge_index
-            if self.config.dataset.task == "NodeClassification"
-            else data
-        )
+        pos_edge_index = data.edge_index if self.config.dataset.task == "NodeClassification" else data
         pos_edge_index = pos_edge_index.to(self.config.device)
         pos_out = model(pos_edge_index[0], pos_edge_index[1])
 
         # Negative edges
-        neg_edge_index = self.get_negative_samples(
-            pos_edge_index, dataset.num_nodes, pos_edge_index.size(1)
-        )
+        neg_edge_index = self.get_negative_samples(pos_edge_index, dataset.num_nodes, pos_edge_index.size(1))
         neg_edge_index.to(self.config.device)
         neg_out = model(neg_edge_index[0], neg_edge_index[1])
 
         # Combining positive and negative edges
         out = torch.cat([pos_out, neg_out], dim=0)
-        y = torch.cat(
-            [torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0
-        ).to(self.config.device)
+        y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(
+            self.config.device
+        )
         acc = self.metrics(out, y, type="accuracy")
         loss = criterion(out, y)
         loss.backward()
@@ -160,13 +141,14 @@ class ShallowTrainer:
         model = model.to(self.config.device)
 
         optimizer = optim.Adam(list(model.parameters()), lr=self.training_args.lr)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.1, patience=10
-        )
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=10)
         prog_bar = tqdm(range(self.training_args.epochs))
 
         # applies sigmoid by default
         criterion = nn.BCEWithLogitsLoss()
+
+        self.Logger.metrics = ["loss", "acc"]
+        self.Logger.start_run()
 
         for epoch in prog_bar:
             loss, acc = self.train(
@@ -177,9 +159,12 @@ class ShallowTrainer:
                 optimizer=optimizer,
             )
             prog_bar.set_postfix({"loss": loss, "Train Acc.": acc})
+            self.Logger.add_to_run(np.array([loss, acc]))
             scheduler.step(loss)
-            # self.log.info(f"Epoch {epoch + 1}, Loss: {loss:.4f}, Acc: {acc:.4f}")
 
+            # self.log.info(f"Epoch {epoch + 1}, Loss: {loss:.4f}, Acc: {acc:.4f}")
+        self.Logger.end_run()
+        self.Logger.save_results(self.save_path + "/results.json")
         self.save_embeddings(model)
         self.log.info(
             f"Embeddings have been saved at {self.embedding_save_path} you can now use them for any downstream task"
