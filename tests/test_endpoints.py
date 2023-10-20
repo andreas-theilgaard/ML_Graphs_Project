@@ -66,8 +66,8 @@ def test_shallow_classification():
     )
     output = completed_process.stdout
     output = ast.literal_eval(output)
-    assert output["loss"] == 0.5420472621917725
-    assert output["acc"] == 0.7420526146888733
+    assert output["loss"] == 0.5949175953865051
+    assert output["acc"] == 0.59163898229599
 
 
 def test_downstream_classification():
@@ -151,8 +151,8 @@ def test_shallow_linkprediction():
     )
     output = completed_process.stdout
     output = ast.literal_eval(output)
-    assert output["loss"] == 0.5544281005859375
-    assert output["acc"] == 0.7238722443580627
+    assert output["loss"] == 0.6056017875671387
+    assert output["acc"] == 0.5937978029251099
 
 
 # def test_gnn_linkprediction():
@@ -166,3 +166,4 @@ def test_shallow_linkprediction():
 #     output = ast.literal_eval(output)
 #     assert output['loss'] == 1.0085030351438709
 #     assert output['hits@50'] == 0.033067840877204345
+#

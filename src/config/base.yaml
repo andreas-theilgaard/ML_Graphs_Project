@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - dataset: ogbn-arxiv
+  - dataset: ogbl-collab
 
 version: 'Graph Project v1'
 
@@ -8,7 +8,7 @@ hydra:
   run:
     dir: ./outputs/${dataset.task}/${dataset.dataset_name}/${model_type}/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
-model_type: Shallow
+model_type: ShallowDirect
 device: 'cpu'
 runs: 1
 debug: False

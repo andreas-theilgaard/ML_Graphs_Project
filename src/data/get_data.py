@@ -38,9 +38,7 @@ class DataLoader:
         dataset = (
             PygNodePropPredDataset(name=self.dataset, root="data")
             if self.model_name != "GNN"
-            else PygNodePropPredDataset(
-                name=self.dataset, root="data", transform=T.ToSparseTensor()
-            )
+            else PygNodePropPredDataset(name=self.dataset, root="data", transform=T.ToSparseTensor())
         )
         self.dataset_summary(dataset)
         # data = dataset[0]
@@ -68,7 +66,8 @@ class DataLoader:
     Number of edges: {data.num_edges} \n
     Is undirected: {data.is_undirected()}
             """
-        self.log.info(summary)
+        if self.log:
+            self.log.info(summary)
 
     def get_data(self):
         if self.task_type == "NodeClassification":
