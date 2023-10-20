@@ -32,13 +32,13 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         config.dataset[config.model_type].saved_embeddings
         and config.dataset[config.model_type].using_features
     ):
-        embedding = torch.load(config.model.saved_embeddings, map_location=config.device)
+        embedding = torch.load(config.dataset[config.model_type].saved_embeddings, map_location=config.device)
         x = torch.cat([data.x, embedding], dim=-1)
     if (
         config.dataset[config.model_type].saved_embeddings
         and not config.dataset[config.model_type].using_features
     ):
-        embedding = torch.load(config.model.saved_embeddings, map_location=config.device)
+        embedding = torch.load(config.dataset[config.model_type].saved_embeddings, map_location=config.device)
         x = embedding
     if (
         not config.dataset[config.model_type].saved_embeddings

@@ -103,3 +103,4 @@ target/
 *.err
 *.sh
 *.out
+/converter.py

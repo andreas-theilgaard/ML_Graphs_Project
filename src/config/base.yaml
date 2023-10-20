@@ -8,7 +8,7 @@ hydra:
   run:
     dir: ./outputs/${dataset.task}/${dataset.dataset_name}/${model_type}/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
-model_type: ShallowDirect
+model_type: Shallow
 device: 'cpu'
 runs: 1
 debug: False

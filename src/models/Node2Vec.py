@@ -29,21 +29,17 @@ class Node2Vec:
         ).to(device)
 
     def save_embeddings(self, model):
-        self.embedding_save_path = self.save_path + "embedding.pth"
+        self.embedding_save_path = self.save_path + "/embedding.pth"
         torch.save(model.embedding.weight.data.cpu(), self.embedding_save_path)
 
     def train(self, batch_size, epochs, lr, num_workers=0):
-        loader = self.model.loader(
-            batch_size=batch_size, shuffle=True, num_workers=num_workers
-        )
+        loader = self.model.loader(batch_size=batch_size, shuffle=True, num_workers=num_workers)
         optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr=lr)
         self.model.train()
         for epoch in tqdm(range(epochs)):
             for i, (pos_sample, neg_sample) in enumerate(tqdm(loader)):
                 optimizer.zero_grad()
-                loss = self.model.loss(
-                    pos_sample.to(self.device), neg_sample.to(self.device)
-                )
+                loss = self.model.loss(pos_sample.to(self.device), neg_sample.to(self.device))
                 loss.backward()
                 optimizer.step()
             # Save embedding
