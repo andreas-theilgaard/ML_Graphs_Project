@@ -9,6 +9,8 @@ from src.models.logger import LoggerClass
 from src.models.utils import set_seed
 from src.models.utils import prepare_metric_cols
 from torch_geometric.utils import negative_sampling
+from src.models.utils import get_k_laplacian_eigenvectors
+from torch_geometric.utils import to_undirected
 
 
 class LinkPredictor(nn.Module):
@@ -199,7 +201,8 @@ class MLP_LinkPrediction:
 
 def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
-    split_edge = dataset.get_edge_split()
+    if config.dataset.dataset_name in ["ogbl-collab"]:
+        split_edge = dataset.get_edge_split()
 
     if (
         config.dataset[config.model_type].saved_embeddings
@@ -218,6 +221,13 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         and config.dataset[config.model_type].using_features
     ):
         x = data.x
+    if config.dataset[config.model_type].use_spectral:
+        if data.is_directed():
+            data.edge_index = to_undirected(data.edge_index)
+        x = get_k_laplacian_eigenvectors(
+            data=data, dataset=dataset, k=config.dataset[config.model_type].K, is_undirected=True
+        )
+
     X = x.to(config.device)
 
     evaluator = Evaluator(name=config.dataset.dataset_name)

@@ -21,8 +21,7 @@ pip3 install -—no-cache-dir torch-scatter==2.1.1 -f https://data.pyg.org/whl/t
 pip3 install -—no-cache-dir torch-cluster==1.6.1 -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
 ```
 Finally, setup the environment and install any auxiliary dependencies using
-```
-pip install -r requirements.txt
+```pip3 install -r requirements.txt
 ```
 
 Running Experiments
@@ -31,7 +30,7 @@ Experiments are executed using the `src/experiments/run_exps.py` file.
 ### Example 1:
 This example shows how a simple MLP baseline can be trained for node classification on the ogbn-arxiv dataset.
 ```
-python3 src/experiments/run_experiments.py --config-name='base.yaml' dataset='ogbn-arxiv' model_type=DownStream
+python3 src/experiments/run_experiments.py --config-name='base.yaml' dataset='ogbn-arxiv' model_type=DownStream task='NodeClassification'
 ```
 
 

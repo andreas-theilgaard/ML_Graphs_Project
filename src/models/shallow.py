@@ -5,8 +5,9 @@ from torch_geometric.utils import to_undirected, negative_sampling
 from src.models.utils import set_seed, get_k_laplacian_eigenvectors
 import networkx as nx
 from tqdm import tqdm
-import hydra
 import numpy as np
+from torch.utils.data import DataLoader
+from ogb.linkproppred import Evaluator
 
 
 def decoder(decode_type, beta, z_i, z_j):
@@ -61,6 +62,74 @@ class ShallowModel(nn.Module):
         return decoder(self.decoder_type, self.beta, z_i, z_j)
 
 
+@torch.no_grad()
+def test_link(model, split_edge, evaluator, batch_size, device):
+    model.eval()
+    # get training edges
+    pos_train_edge = split_edge["train"]["edge"].to(device)
+    # get validation edges
+    pos_valid_edge = split_edge["valid"]["edge"].to(device)
+    neg_valid_edge = split_edge["valid"]["edge_neg"].to(device)
+    # get test edges
+    pos_test_edge = split_edge["test"]["edge"].to(device)
+    neg_test_edge = split_edge["test"]["edge_neg"].to(device)
+
+    pos_train_preds = []
+    for perm in DataLoader(range(pos_train_edge.size(0)), batch_size):
+        edge = pos_train_edge[perm].t()
+        pos_train_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
+    pos_train_pred = torch.cat(pos_train_preds, dim=0)
+
+    pos_valid_preds = []
+    for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
+        edge = pos_valid_edge[perm].t()
+        pos_valid_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
+    pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
+
+    neg_valid_preds = []
+    for perm in DataLoader(range(neg_valid_edge.size(0)), batch_size):
+        edge = neg_valid_edge[perm].t()
+        neg_valid_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
+    neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
+
+    pos_test_preds = []
+    for perm in DataLoader(range(pos_test_edge.size(0)), batch_size):
+        edge = pos_test_edge[perm].t()
+        pos_test_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
+    pos_test_pred = torch.cat(pos_test_preds, dim=0)
+
+    neg_test_preds = []
+    for perm in DataLoader(range(neg_test_edge.size(0)), batch_size):
+        edge = neg_test_edge[perm].t()
+        neg_test_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
+    neg_test_pred = torch.cat(neg_test_preds, dim=0)
+
+    results = {}
+    for K in [10, 50, 100]:
+        evaluator.K = K
+        train_hits = evaluator.eval(
+            {
+                "y_pred_pos": pos_train_pred,
+                "y_pred_neg": neg_valid_pred,
+            }
+        )[f"hits@{K}"]
+        valid_hits = evaluator.eval(
+            {
+                "y_pred_pos": pos_valid_pred,
+                "y_pred_neg": neg_valid_pred,
+            }
+        )[f"hits@{K}"]
+        test_hits = evaluator.eval(
+            {
+                "y_pred_pos": pos_test_pred,
+                "y_pred_neg": neg_test_pred,
+            }
+        )[f"hits@{K}"]
+
+        results[f"hits@{K}"] = (train_hits, valid_hits, test_hits)
+    return results
+
+
 class ShallowTrainer:
     def __init__(self, config, training_args, save_path, log, Logger):
         self.config = config
@@ -82,7 +151,7 @@ class ShallowTrainer:
         optimizer.zero_grad()
 
         # Positive edges
-        pos_edge_index = data.edge_index if self.config.dataset.task == "NodeClassification" else data
+        pos_edge_index = data.edge_index if self.config.task == "NodeClassification" else data
         pos_edge_index = pos_edge_index.to(self.config.device)
         pos_out = model(pos_edge_index[0], pos_edge_index[1])
 
@@ -115,7 +184,7 @@ class ShallowTrainer:
             data.edge_index = to_undirected(data.edge_index)
 
         # If task is link prediction only use training edges
-        if self.config.dataset.task == "LinkPrediction":
+        if self.config.task == "LinkPrediction":
             for_link = True
             split_edge = dataset.get_edge_split()
             data = (split_edge["train"]["edge"]).T
@@ -147,8 +216,9 @@ class ShallowTrainer:
         # applies sigmoid by default
         criterion = nn.BCEWithLogitsLoss()
 
-        self.Logger.metrics = ["loss", "acc"]
+        self.Logger.metrics = ["loss", "Train hits@50", "Val hits@50", "Test hits@50"]
         self.Logger.start_run()
+        evaluator = Evaluator(name="ogbl-collab")
 
         for epoch in prog_bar:
             loss, acc = self.train(
@@ -159,12 +229,29 @@ class ShallowTrainer:
                 optimizer=optimizer,
             )
             prog_bar.set_postfix({"loss": loss, "Train Acc.": acc})
-            self.Logger.add_to_run(np.array([loss, acc]))
+            if for_link:
+                results = test_link(
+                    model=model,
+                    split_edge=split_edge,
+                    evaluator=evaluator,
+                    batch_size=65536,
+                    device=self.config.device,
+                )
+                self.Logger.add_to_run(
+                    np.array([loss, results["hits@50"][0], results["hits@50"][1], results["hits@50"][2]])
+                )
+                if epoch % 10 == 0:
+                    self.log.info(
+                        f"Epoch {epoch+1}, Trains hits@50 : {results['hits@50'][0]:.4f}, Valid hits@50 : {results['hits@50'][1]:.4f}, Test hits@50 : {results['hits@50'][2]:.4f}"
+                    )
             scheduler.step(loss)
+            # log
+            self.log.info(f"Epoch {epoch + 1}, Loss: {loss:.4f}, Acc: {acc:.4f}")
 
-            # self.log.info(f"Epoch {epoch + 1}, Loss: {loss:.4f}, Acc: {acc:.4f}")
         self.Logger.end_run()
-        self.Logger.save_results(self.save_path + "/results.json")
+        if for_link:
+            self.Logger.save_results(self.save_path + "/results.json")
+
         self.save_embeddings(model)
         self.log.info(
             f"Embeddings have been saved at {self.embedding_save_path} you can now use them for any downstream task"

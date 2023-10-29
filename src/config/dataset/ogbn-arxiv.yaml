@@ -1,10 +1,11 @@
 dataset_name: 'ogbn-arxiv'
 metrics: ['acc']
-task: 'NodeClassification'
 
 DownStream:
   saved_embeddings: False
   using_features: True
+  use_spectral: False
+  K: 16
   training:
     epochs: 500
     num_layers: 3
