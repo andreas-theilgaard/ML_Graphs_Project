@@ -3,6 +3,7 @@ from ogb.linkproppred import PygLinkPropPredDataset
 from torch_geometric.utils import to_undirected
 import torch_geometric.transforms as T
 import torch
+from src.data.data_utils import TorchGeometricDatasets
 
 
 class DataLoader:
@@ -35,19 +36,24 @@ class DataLoader:
             ], f"Expect LinkPrediction dataset to be one of ['ogbl-collab'] but received {self.dataset}"
 
     def get_NodeClassification_dataset(self):
-        dataset = (
-            PygNodePropPredDataset(name=self.dataset, root="data")
-            if self.model_name != "GNN"
-            else PygNodePropPredDataset(name=self.dataset, root="data", transform=T.ToSparseTensor())
-        )
+        if self.dataset in ["ogbn-arxiv"]:
+            dataset = (
+                PygNodePropPredDataset(name=self.dataset, root="data")
+                if self.model_name != "GNN"
+                else PygNodePropPredDataset(name=self.dataset, root="data", transform=T.ToSparseTensor())
+            )
+        elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo"]:
+            PYG_DATASETS = TorchGeometricDatasets(dataset=self.dataset, task=self.task_type)
+            dataset = PYG_DATASETS.get_dataset()
         self.dataset_summary(dataset)
-        # data = dataset[0]
-        # if not data.is_undirected():
-        #    data.edge_index = to_undirected(data.edge_index,num_nodes=data.num_nodes)
         return dataset
 
     def get_LinkPrediction_dataset(self):
-        dataset = PygLinkPropPredDataset(name=self.dataset, root="data")
+        if self.dataset in ["ogbl-collab", "ogbl-ppa"]:
+            dataset = PygLinkPropPredDataset(name=self.dataset, root="data")
+        elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo"]:
+            PYG_DATASETS = TorchGeometricDatasets(dataset=self.dataset, task=self.task_type)
+            dataset = PYG_DATASETS.get_dataset()
         self.dataset_summary(dataset)
         return dataset
 

@@ -4,6 +4,8 @@ import torch
 import numpy as np
 from src.models.utils import set_seed
 from src.models.utils import prepare_metric_cols
+from src.models.utils import get_k_laplacian_eigenvectors
+from torch_geometric.utils import to_undirected
 
 
 def mlp_node_classification(dataset, config, training_args, log, save_path, seeds, Logger):
@@ -45,6 +47,13 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         and config.dataset[config.model_type].using_features
     ):
         x = data.x
+    if config.dataset[config.model_type].use_spectral:
+        if data.is_directed():
+            data.edge_index = to_undirected(data.edge_index)
+        x = get_k_laplacian_eigenvectors(
+            data=data, dataset=dataset, k=config.dataset[config.model_type].K, is_undirected=True
+        )
+
     X = x.to(config.device)
     y = data.y.to(config.device)
 

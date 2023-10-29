@@ -9,30 +9,30 @@ BASE = "python3 src/experiments/run_exps.py --config-name='base.yaml'"
 endpoints = {
     "shallow": {
         "NodeClassification": {
-            "laplacian": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
-            "random": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
+            "laplacian": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' task='NodeClassification' dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
+            "random": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' task='NodeClassification' dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
         },
         "LinkPrediction": {
-            "laplacian": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
-            "random": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
+            "laplacian": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' task='LinkPrediction' dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
+            "random": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' task='LinkPrediction' dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
         },
     },
     "DownStream": {
         "NodeClassification": {
-            "BaselineMLP": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=DownStream dataset.DownStream.training.epochs=10"
+            "BaselineMLP": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=DownStream task='NodeClassification' dataset.DownStream.training.epochs=10"
         },
         "LinkPrediction": {
-            "BaselineMLP": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=DownStream dataset.DownStream.training.epochs=10"
+            "BaselineMLP": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=DownStream task='LinkPrediction' dataset.DownStream.training.epochs=10"
         },
     },
     "GNN": {
         "NodeClassification": {
-            "GraphSage": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=10 dataset.GNN.model='GraphSage'",
-            "GCN": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=10 dataset.GNN.model='GCN'",
+            "GraphSage": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN task='NodeClassification' dataset.GNN.training.epochs=10 dataset.GNN.model='GraphSage'",
+            "GCN": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN task='NodeClassification' dataset.GNN.training.epochs=10 dataset.GNN.model='GCN'",
         },
         "LinkPrediction": {
-            "GraphSage": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=2 dataset.GNN.model='GraphSage'",
-            "GCN": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN dataset.GNN.training.epochs=2 dataset.GNN.model='GCN'",
+            "GraphSage": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN task='LinkPrediction' dataset.GNN.training.epochs=2 dataset.GNN.model='GraphSage'",
+            "GCN": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN task='LinkPrediction' dataset.GNN.training.epochs=2 dataset.GNN.model='GCN'",
         },
     },
 }
