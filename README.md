@@ -20,9 +20,20 @@ pip3 install -—no-cache-dir torch-sparse==0.6.16 -f https://data.pyg.org/whl/t
 pip3 install -—no-cache-dir torch-scatter==2.1.1 -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
 pip3 install -—no-cache-dir torch-cluster==1.6.1 -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
 ```
+
 Finally, setup the environment and install any auxiliary dependencies using
-```pip3 install -r requirements.txt
 ```
+pip3 install -r requirements.txt
+```
+
+Models
+------------
+Current models suported are:
+* Simple MLP, posibility to use data featues or trained node embeddings or both
+* GraphSage
+* Node2Vec
+* Shallow
+* Combined
 
 Running Experiments
 ------------
