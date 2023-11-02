@@ -1,5 +1,6 @@
 dataset_name: 'ogbl-collab'
-metrics: ['hits@50']
+metrics: ['hits@10','hits@50','hits@100','acc']
+track_metric: 'hits@50'
 
 DownStream:
   saved_embeddings: False
@@ -42,8 +43,9 @@ GNN:
 Shallow:
   training:
     lr: 0.1
-    epochs: 300
+    epochs: 500
     init_beta: 0.0
     embedding_dim: 2
     init: 'laplacian'
     decode_type: 'dist'
+    batch_size: 65536

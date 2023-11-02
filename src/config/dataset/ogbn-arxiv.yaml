@@ -34,7 +34,7 @@ GNN:
     num_layers: 3
     dropout: 0.5
     lr: 0.01
-    epochs: 500
+    epochs: 5
     use_valedges: True
 
 Shallow:
