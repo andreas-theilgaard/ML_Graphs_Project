@@ -25,25 +25,23 @@ class DataLoader:
             "NodeClassification",
             "LinkPrediction",
         ], f"Expect task_type to be either 'NodeClassification' or 'LinkPrediction' but received {self.task_type}"
-        if self.task_type == "NodeClassification":
-            assert self.dataset in [
-                "ogbn-arxiv",
-                "ogbn-products",
-            ], f"Expect NodeClassification dataset to be one of ['ogbn-arxiv'] but received {self.dataset}"
-        if self.task_type == "LinkPrediction":
-            assert self.dataset in [
-                "ogbl-collab"
-            ], f"Expect LinkPrediction dataset to be one of ['ogbl-collab'] but received {self.dataset}"
+
+        if self.dataset in ["ogbn-arxiv", "ogbn-products"] and self.task_type == "LinkPrediction":
+            raise ValueError(f"{self.dataset} can only be used for NodeClassification")
+        if self.dataset in ["ogbl-collab", "ogbl-ppa"] and self.task_type == "NodeClassification":
+            raise ValueError(f"{self.dataset} can only be used for LinkPrediction")
 
     def get_NodeClassification_dataset(self):
-        if self.dataset in ["ogbn-arxiv"]:
+        if self.dataset in ["ogbn-arxiv", "ogbn-products"]:
             dataset = (
                 PygNodePropPredDataset(name=self.dataset, root="data")
                 if self.model_name != "GNN"
                 else PygNodePropPredDataset(name=self.dataset, root="data", transform=T.ToSparseTensor())
             )
-        elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo"]:
-            PYG_DATASETS = TorchGeometricDatasets(dataset=self.dataset, task=self.task_type)
+        elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo", "Twitch"]:
+            PYG_DATASETS = TorchGeometricDatasets(
+                dataset=self.dataset, task=self.task_type, model=self.model_name
+            )
             dataset = PYG_DATASETS.get_dataset()
         self.dataset_summary(dataset)
         return dataset
@@ -51,8 +49,10 @@ class DataLoader:
     def get_LinkPrediction_dataset(self):
         if self.dataset in ["ogbl-collab", "ogbl-ppa"]:
             dataset = PygLinkPropPredDataset(name=self.dataset, root="data")
-        elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo"]:
-            PYG_DATASETS = TorchGeometricDatasets(dataset=self.dataset, task=self.task_type)
+        elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo", "Twitch"]:
+            PYG_DATASETS = TorchGeometricDatasets(
+                dataset=self.dataset, task=self.task_type, model=self.model_name
+            )
             dataset = PYG_DATASETS.get_dataset()
         self.dataset_summary(dataset)
         return dataset

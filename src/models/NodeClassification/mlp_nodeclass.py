@@ -56,6 +56,8 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
 
     X = x.to(config.device)
     y = data.y.to(config.device)
+    if len(y.shape) == 1:
+        y = y.unsqueeze(1)
 
     evaluator = Evaluator(name=config.dataset.dataset_name)
 
@@ -65,7 +67,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
 
         model = MLP_model(
             device=config.device,
-            in_channels=x.shape[-1],
+            in_channels=X.shape[-1],
             hidden_channels=training_args.hidden_channels,
             out_channels=dataset.num_classes,
             num_layers=training_args.num_layers,
