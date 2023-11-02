@@ -1,11 +1,14 @@
 from src.models.NodeClassification.mlp import MLP_model
-from ogb.nodeproppred import Evaluator
+
+# from ogb.nodeproppred import Evaluator
 import torch
 import numpy as np
 from src.models.utils import set_seed
+from src.models.utils import create_path
 from src.models.utils import prepare_metric_cols
 from src.models.utils import get_k_laplacian_eigenvectors
 from torch_geometric.utils import to_undirected
+from src.models.metrics import METRICS
 
 
 def mlp_node_classification(dataset, config, training_args, log, save_path, seeds, Logger):
@@ -59,7 +62,8 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
     if len(y.shape) == 1:
         y = y.unsqueeze(1)
 
-    evaluator = Evaluator(name=config.dataset.dataset_name)
+    # evaluator = Evaluator(name=config.dataset.dataset_name)
+    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.task)
 
     for seed in seeds:
         set_seed(seed=seed)
@@ -74,6 +78,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             dropout=training_args.dropout,
             log=log,
             logger=Logger,
+            config=config,
         )
 
         model.fit(
@@ -87,7 +92,12 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         Logger.end_run()
 
     Logger.save_results(save_path + "/results.json")
-    Logger.get_statistics(
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        directions=["-", "+", "+", "+"],
-    )
+    if "save_to_folder" in config:
+        create_path(config.save_to_folder)
+        additional_save_path = (
+            f"{config.save_to_folder}/{config.task}/{config.dataset.dataset_name}/{config.model_type}"
+        )
+        create_path(f"{additional_save_path}")
+        Logger.save_results(additional_save_path + "/results.json")
+
+    Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

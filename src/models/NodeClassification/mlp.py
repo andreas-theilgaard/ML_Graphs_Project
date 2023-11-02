@@ -55,6 +55,7 @@ class MLP_model:
         dropout: float,
         log,
         logger,
+        config,
     ):
         self.device = device
         self.model = NodeClassifier(
@@ -67,6 +68,7 @@ class MLP_model:
         self.model.to(device)
         self.log = log
         self.logger = logger
+        self.config = config
 
     def train(self, X, y, train_idx, optimizer):
         self.model.train()
@@ -83,28 +85,13 @@ class MLP_model:
         with torch.no_grad():
             out = self.model(X)
             y_hat = out.argmax(dim=-1, keepdim=True)
-            train_acc = evaluator.eval(
-                {
-                    "y_true": y[split_idx["train"]],
-                    "y_pred": y_hat[split_idx["train"]],
-                }
-            )[evaluator.eval_metric]
-
-            valid_acc = evaluator.eval(
-                {
-                    "y_true": y[split_idx["valid"]],
-                    "y_pred": y_hat[split_idx["valid"]],
-                }
-            )[evaluator.eval_metric]
-
-            test_acc = evaluator.eval(
-                {
-                    "y_true": y[split_idx["test"]],
-                    "y_pred": y_hat[split_idx["test"]],
-                }
-            )[evaluator.eval_metric]
-
-        return train_acc, valid_acc, test_acc
+            predictions = {
+                "train": {"y_true": y[split_idx["train"]], "y_hat": y_hat[split_idx["train"]]},
+                "val": {"y_true": y[split_idx["valid"]], "y_hat": y_hat[split_idx["valid"]]},
+                "test": {"y_true": y[split_idx["test"]], "y_hat": y_hat[split_idx["test"]]},
+            }
+            results = evaluator.collect_metrics(predictions)
+            return results
 
     def fit(self, X, y, epochs: int, split_idx, evaluator, lr):
         # self.model.reset_parameters()
@@ -117,14 +104,23 @@ class MLP_model:
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train Acc.": result[0],
-                    "Val Acc.": result[1],
-                    "Test Acc.": result[-1],
+                    f"Train {self.config.dataset.track_metric}": result["train"][
+                        self.config.dataset.track_metric
+                    ],
+                    f"Val {self.config.dataset.track_metric}": result["val"][
+                        self.config.dataset.track_metric
+                    ],
+                    f"Test {self.config.dataset.track_metric}": result["test"][
+                        self.config.dataset.track_metric
+                    ],
                 }
             )
-            self.logger.add_to_run(np.array([loss, result[0], result[1], result[-1]]))
 
-        self.log.info(
-            f"Finished training - Train Loss: {loss}, Train Acc.: {result[0]}, Val Acc.: {result[1]}, Test Acc.{result[-1]}"
+            self.logger.add_to_run(loss=loss, results=result)
+
+        self.logger.save_value(
+            {
+                "loss": loss,
+                f"Test {self.config.dataset.track_metric}": result["test"][self.config.dataset.track_metric],
+            }
         )
-        self.logger.save_value({"loss": loss, "Test acc": result[-1]})
