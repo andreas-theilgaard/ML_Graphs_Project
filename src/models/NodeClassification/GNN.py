@@ -2,11 +2,10 @@ import torch
 from src.models.NodeClassification.GCN import GCN
 from src.models.NodeClassification.GraphSage import SAGE
 import torch.nn.functional as F
-from ogb.nodeproppred import Evaluator
 from tqdm import tqdm
 import numpy as np
-from src.models.logger import LoggerClass
 from src.models.utils import set_seed, prepare_metric_cols
+from src.models.metrics import METRICS
 
 
 class GNN:
@@ -67,24 +66,18 @@ class GNN:
         y_true_valid = data.y[split_idx["valid"]]
         y_true_test = data.y[split_idx["test"]]
 
-        train_acc = evaluator.eval({"y_true": y_true_train, "y_pred": y_pred[split_idx["train"]]})[
-            evaluator.eval_metric
-        ]
-
-        valid_acc = evaluator.eval({"y_true": y_true_valid, "y_pred": y_pred[split_idx["valid"]]})[
-            evaluator.eval_metric
-        ]
-
-        test_acc = evaluator.eval({"y_true": y_true_test, "y_pred": y_pred[split_idx["test"]]})[
-            evaluator.eval_metric
-        ]
-
-        return train_acc, valid_acc, test_acc
+        predictions = {
+            "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]]},
+            "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]]},
+            "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]]},
+        }
+        results = evaluator.collect_metrics(predictions)
+        return results
 
 
 def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
-    evaluator = Evaluator(name=config.dataset.dataset_name)
+    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.task)
     data.adj_t = data.adj_t.to_symmetric()
     data = data.to(config.device)
     split_idx = dataset.get_idx_split()
@@ -110,18 +103,16 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
         for i, epoch in enumerate(prog_bar):
             loss = GNN_object.train(model, data, train_idx, optimizer)
             result = GNN_object.test(model, data, split_idx, evaluator)
-            train_acc, valid_acc, test_acc = result
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train Acc.": train_acc,
-                    "Val Acc.": valid_acc,
-                    "Test Acc.": test_acc,
+                    f"Train {config.dataset.track_metric}": result["train"][config.dataset.track_metric],
+                    f"Val {config.dataset.track_metric}": result["val"][config.dataset.track_metric],
+                    f"Test {config.dataset.track_metric}": result["test"][config.dataset.track_metric],
                 }
             )
-            if epoch % 10 == 0:
-                log.info(f"Train: {100*train_acc}, Valid: {100*valid_acc}, Test: {100*test_acc}")
-            Logger.add_to_run(np.array([loss, train_acc, valid_acc, test_acc]))
+            Logger.add_to_run(loss=loss, results=result)
+
         Logger.end_run()
         model.train()
 
@@ -129,9 +120,8 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
         log.info(f"saved model at {model_save_path}")
         torch.save(model.state_dict(), model_save_path)
 
-    Logger.save_value({"loss": loss, "acc": test_acc})
-    Logger.save_results(save_path + "/results.json")
-    Logger.get_statistics(
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        directions=["-", "+", "+", "+"],
+    Logger.save_value(
+        {"loss": loss, f"Test {config.dataset.track_metric}": result["test"][config.dataset.track_metric]}
     )
+    Logger.save_results(save_path + "/results.json")
+    Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))
