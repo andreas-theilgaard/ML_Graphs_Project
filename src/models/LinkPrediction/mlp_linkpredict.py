@@ -4,13 +4,15 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
-from ogb.linkproppred import Evaluator
+
+# from ogb.linkproppred import Evaluator
 from src.models.logger import LoggerClass
 from src.models.utils import set_seed
 from src.models.utils import prepare_metric_cols
 from torch_geometric.utils import negative_sampling
 from src.models.utils import get_k_laplacian_eigenvectors
 from torch_geometric.utils import to_undirected
+from src.models.metrics import METRICS
 
 
 class LinkPredictor(nn.Module):
@@ -59,6 +61,7 @@ class MLP_LinkPrediction:
         log,
         save_path,
         logger,
+        config,
     ):
         self.device = device
         self.model = LinkPredictor(
@@ -72,6 +75,7 @@ class MLP_LinkPrediction:
         self.log = log
         self.save_path = save_path
         self.logger = logger
+        self.config = config
 
     def train(self, X, split_edge, optimizer, batch_size):
         self.model.train()
@@ -145,30 +149,12 @@ class MLP_LinkPrediction:
             neg_test_preds += [self.model(x[edge[0]], x[edge[1]]).squeeze().cpu()]
         neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
-        results = {}
-        for K in [10, 50, 100]:
-            evaluator.K = K
-            train_hits = evaluator.eval(
-                {
-                    "y_pred_pos": pos_train_pred,
-                    "y_pred_neg": neg_valid_pred,
-                }
-            )[f"hits@{K}"]
-            valid_hits = evaluator.eval(
-                {
-                    "y_pred_pos": pos_valid_pred,
-                    "y_pred_neg": neg_valid_pred,
-                }
-            )[f"hits@{K}"]
-            test_hits = evaluator.eval(
-                {
-                    "y_pred_pos": pos_test_pred,
-                    "y_pred_neg": neg_test_pred,
-                }
-            )[f"hits@{K}"]
-
-            results[f"hits@{K}"] = (train_hits, valid_hits, test_hits)
-
+        predictions = {
+            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+        }
+        results = evaluator.collect_metrics(predictions)
         return results
 
     def fit(self, X, split_edge, lr, batch_size, epochs, evaluator):
@@ -181,22 +167,26 @@ class MLP_LinkPrediction:
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train hits@50.": results["hits@50"][0],
-                    "Val hits@50.": results["hits@50"][1],
-                    "Test hits@50.": results["hits@50"][2],
+                    f"Train {self.config.dataset.track_metric}": results["train"][
+                        self.config.dataset.track_metric
+                    ],
+                    f"Val {self.config.dataset.track_metric}": results["val"][
+                        self.config.dataset.track_metric
+                    ],
+                    f"Test {self.config.dataset.track_metric}": results["test"][
+                        self.config.dataset.track_metric
+                    ],
                 }
             )
-            self.logger.add_to_run(
-                np.array(
-                    [
-                        loss,
-                        results["hits@50"][0],
-                        results["hits@50"][1],
-                        results["hits@50"][2],
-                    ]
-                )
-            )
-        self.logger.save_value({"loss": loss, "hits@50": results["hits@50"][2]})
+
+            self.logger.add_to_run(loss=loss, results=results)
+
+        self.logger.save_value(
+            {
+                "loss": loss,
+                f"Test {self.config.dataset.track_metric}": results["test"][self.config.dataset.track_metric],
+            }
+        )
 
 
 def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Logger):
@@ -230,7 +220,8 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
 
     X = x.to(config.device)
 
-    evaluator = Evaluator(name=config.dataset.dataset_name)
+    # evaluator = Evaluator(name=config.dataset.dataset_name)
+    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.task)
 
     for seed in seeds:
         set_seed(seed=seed)
@@ -246,6 +237,7 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
             log=log,
             save_path=save_path,
             logger=Logger,
+            config=config,
         )
         model.fit(
             X=X,
@@ -258,7 +250,4 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         Logger.end_run()
 
     Logger.save_results(save_path + "/results.json")
-    Logger.get_statistics(
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        directions=["-", "+", "+", "+"],
-    )
+    Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

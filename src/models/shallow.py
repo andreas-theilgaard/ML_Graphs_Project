@@ -7,7 +7,9 @@ import networkx as nx
 from tqdm import tqdm
 import numpy as np
 from torch.utils.data import DataLoader
-from ogb.linkproppred import Evaluator
+
+# from ogb.linkproppred import Evaluator
+from src.models.metrics import METRICS
 
 
 def decoder(decode_type, beta, z_i, z_j):
@@ -104,29 +106,12 @@ def test_link(model, split_edge, evaluator, batch_size, device):
         neg_test_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
     neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
-    results = {}
-    for K in [10, 50, 100]:
-        evaluator.K = K
-        train_hits = evaluator.eval(
-            {
-                "y_pred_pos": pos_train_pred,
-                "y_pred_neg": neg_valid_pred,
-            }
-        )[f"hits@{K}"]
-        valid_hits = evaluator.eval(
-            {
-                "y_pred_pos": pos_valid_pred,
-                "y_pred_neg": neg_valid_pred,
-            }
-        )[f"hits@{K}"]
-        test_hits = evaluator.eval(
-            {
-                "y_pred_pos": pos_test_pred,
-                "y_pred_neg": neg_test_pred,
-            }
-        )[f"hits@{K}"]
-
-        results[f"hits@{K}"] = (train_hits, valid_hits, test_hits)
+    predictions = {
+        "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+        "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+        "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+    }
+    results = evaluator.collect_metrics(predictions)
     return results
 
 
@@ -210,15 +195,14 @@ class ShallowTrainer:
         model = model.to(self.config.device)
 
         optimizer = optim.Adam(list(model.parameters()), lr=self.training_args.lr)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=10)
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=10)
         prog_bar = tqdm(range(self.training_args.epochs))
 
         # applies sigmoid by default
         criterion = nn.BCEWithLogitsLoss()
 
-        self.Logger.metrics = ["loss", "Train hits@50", "Val hits@50", "Test hits@50"]
         self.Logger.start_run()
-        evaluator = Evaluator(name="ogbl-collab")
+        evaluator = METRICS(metrics_list=self.config.dataset.metrics, task=self.config.task)
 
         for epoch in prog_bar:
             loss, acc = self.train(
@@ -234,17 +218,16 @@ class ShallowTrainer:
                     model=model,
                     split_edge=split_edge,
                     evaluator=evaluator,
-                    batch_size=65536,
+                    batch_size=self.training_args.batch_size,
                     device=self.config.device,
                 )
-                self.Logger.add_to_run(
-                    np.array([loss, results["hits@50"][0], results["hits@50"][1], results["hits@50"][2]])
-                )
+                self.Logger.add_to_run(loss=loss, results=results)
                 if epoch % 10 == 0:
                     self.log.info(
-                        f"Epoch {epoch+1}, Trains hits@50 : {results['hits@50'][0]:.4f}, Valid hits@50 : {results['hits@50'][1]:.4f}, Test hits@50 : {results['hits@50'][2]:.4f}"
+                        f"Epoch {epoch+1}, Train {self.config.dataset.track_metric}: {results['train'][self.config.dataset.track_metric]}, Val {self.config.dataset.track_metric}: {results['val'][self.config.dataset.track_metric]}, Test {self.config.dataset.track_metric}: {results['test'][self.config.dataset.track_metric]}"
                     )
-            scheduler.step(loss)
+
+            # scheduler.step(loss)
             # log
             self.log.info(f"Epoch {epoch + 1}, Loss: {loss:.4f}, Acc: {acc:.4f}")
 

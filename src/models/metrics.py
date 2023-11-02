@@ -89,7 +89,7 @@ class METRICS:
                         K=K,
                         y_pred_pos=predictions[data_type]["y_pred_pos"],
                         y_pred_neg=predictions[data_type]["y_pred_neg"],
-                    )
+                    )[metric]
 
             results[data_type] = inner_results
 

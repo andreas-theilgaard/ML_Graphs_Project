@@ -95,7 +95,7 @@ def test_gnn_classification():
     output = completed_process.stdout
     output = ast.literal_eval(output)
     assert output["loss"] == 1.4672894477844238
-    assert output["acc"] == 0.5953953459662984
+    assert output["Test acc"] == 0.5953953459662984
     completed_process = subprocess.run(
         endpoints["GNN"]["NodeClassification"]["GCN"],
         capture_output=True,
@@ -106,7 +106,7 @@ def test_gnn_classification():
     output = completed_process.stdout
     output = ast.literal_eval(output)
     assert output["loss"] == 1.3775808811187744
-    assert output["acc"] == 0.5042692837890665
+    assert output["Test acc"] == 0.5042692837890665
 
 
 ######################################
@@ -125,7 +125,7 @@ def test_downstream_linkprediction():
     output = completed_process.stdout
     output = ast.literal_eval(output)
     assert output["loss"] == 0.504451534952073
-    assert output["hits@50"] == 0.02900990740141164
+    assert output["Test hits@50"] == 0.02900990740141164
 
 
 def test_shallow_linkprediction():
@@ -167,7 +167,3 @@ def test_shallow_linkprediction():
 #     assert output['loss'] == 1.0085030351438709
 #     assert output['hits@50'] == 0.033067840877204345
 #
-
-
-if __name__ == "__main__":
-    test_downstream_classification()
