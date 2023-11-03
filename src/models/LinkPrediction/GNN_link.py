@@ -5,9 +5,9 @@ import numpy as np
 from torch_sparse import SparseTensor
 import torch_geometric.transforms as T
 from torch_geometric.nn import GCNConv, SAGEConv
-from ogb.linkproppred import Evaluator
 from tqdm import tqdm
 from src.models.utils import set_seed, prepare_metric_cols
+from src.models.metrics import METRICS
 
 
 class SAGE(torch.nn.Module):
@@ -167,30 +167,12 @@ def test(model, predictor, data, split_edge, evaluator, batch_size):
         neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
-    results = {}
-    for K in [10, 50, 100]:
-        evaluator.K = K
-        train_hits = evaluator.eval(
-            {
-                "y_pred_pos": pos_train_pred,
-                "y_pred_neg": neg_valid_pred,
-            }
-        )[f"hits@{K}"]
-        valid_hits = evaluator.eval(
-            {
-                "y_pred_pos": pos_valid_pred,
-                "y_pred_neg": neg_valid_pred,
-            }
-        )[f"hits@{K}"]
-        test_hits = evaluator.eval(
-            {
-                "y_pred_pos": pos_test_pred,
-                "y_pred_neg": neg_test_pred,
-            }
-        )[f"hits@{K}"]
-
-        results[f"hits@{K}"] = (train_hits, valid_hits, test_hits)
-
+    predictions = {
+        "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+        "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+        "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+    }
+    results = evaluator.collect_metrics(predictions)
     return results
 
 
@@ -200,7 +182,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
     data.edge_weight = data.edge_weight.view(-1).to(torch.float)
     data = T.ToSparseTensor()(data)
     split_edge = dataset.get_edge_split()
-    evaluator = Evaluator(name=config.dataset.dataset_name)
+    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
 
     if training_args.use_valedges:
         val_edge_index = split_edge["valid"]["edge"].t()
@@ -268,23 +250,24 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train hits@50.": results["hits@50"][0],
-                    "Val hits@50.": results["hits@50"][1],
-                    "Test hits@50.": results["hits@50"][2],
+                    f"Train {config.dataset.track_metric}": results["train"][config.dataset.track_metric],
+                    f"Val {config.dataset.track_metric}": results["val"][config.dataset.track_metric],
+                    f"Test {config.dataset.track_metric}": results["test"][config.dataset.track_metric],
                 }
             )
-            Logger.add_to_run(
-                np.array([loss, results["hits@50"][0], results["hits@50"][1], results["hits@50"][2]])
-            )
-        Logger.end_run()
 
+            Logger.add_to_run(loss=loss, results=results)
+
+        Logger.end_run()
         model_save_path = save_path + f"/model_{seed}.pth"
         log.info(f"saved model at {model_save_path}")
         torch.save(model.state_dict(), model_save_path)
 
     Logger.save_results(save_path + "/results.json")
-    Logger.get_statistics(
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        directions=["-", "+", "+", "+"],
+    Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))
+    Logger.save_value(
+        {
+            "loss": loss,
+            f"Test {config.dataset.track_metric}": results["test"][config.dataset.track_metric],
+        }
     )
-    Logger.save_value({"loss": loss, "hits@50": results["hits@50"][2]})

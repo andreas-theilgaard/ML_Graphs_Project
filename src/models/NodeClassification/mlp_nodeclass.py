@@ -63,7 +63,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         y = y.unsqueeze(1)
 
     # evaluator = Evaluator(name=config.dataset.dataset_name)
-    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.task)
+    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
 
     for seed in seeds:
         set_seed(seed=seed)
@@ -95,7 +95,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
     if "save_to_folder" in config:
         create_path(config.save_to_folder)
         additional_save_path = (
-            f"{config.save_to_folder}/{config.task}/{config.dataset.dataset_name}/{config.model_type}"
+            f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
         )
         create_path(f"{additional_save_path}")
         Logger.save_results(additional_save_path + "/results.json")

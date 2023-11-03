@@ -1,15 +1,14 @@
 defaults:
   - _self_
-  - dataset: ogbl-collab
+  - dataset: ogbn-arxiv
 
 version: 'Graph Project v1'
 
 hydra:
   run:
-    dir: ./outputs/${task}/${dataset.dataset_name}/${model_type}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ./outputs/${dataset.task}/${dataset.dataset_name}/${model_type}/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
-model_type: Shallow
+model_type: GNN
 device: 'cpu'
 runs: 1
-task: 'LinkPrediction'
 debug: False

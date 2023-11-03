@@ -1,6 +1,6 @@
 import subprocess
 import ast
-
+import numpy as np
 
 DISABLE_HYDRA = "hydra.run.dir=. hydra.output_subdir=null hydra/job_logging=disabled hydra/hydra_logging=disabled debug=True"
 BASE = "python3 src/experiments/run_exps.py --config-name='base.yaml'"
@@ -9,30 +9,30 @@ BASE = "python3 src/experiments/run_exps.py --config-name='base.yaml'"
 endpoints = {
     "shallow": {
         "NodeClassification": {
-            "laplacian": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 task='NodeClassification' dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
-            "random": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 task='NodeClassification' dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
+            "laplacian": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
+            "random": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
         },
         "LinkPrediction": {
-            "laplacian": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 task='LinkPrediction' dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
-            "random": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 task='LinkPrediction' dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
+            "laplacian": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10",
+            "random": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10",
         },
     },
     "DownStream": {
         "NodeClassification": {
-            "BaselineMLP": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=DownStream runs=1 task='NodeClassification' dataset.DownStream.training.epochs=10"
+            "BaselineMLP": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=DownStream runs=1 dataset.DownStream.training.epochs=10"
         },
         "LinkPrediction": {
-            "BaselineMLP": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=DownStream runs=1 task='LinkPrediction' dataset.DownStream.training.epochs=10"
+            "BaselineMLP": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=DownStream runs=1 dataset.DownStream.training.epochs=10"
         },
     },
     "GNN": {
         "NodeClassification": {
-            "GraphSage": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN runs=1 task='NodeClassification' dataset.GNN.training.epochs=10 dataset.GNN.model='GraphSage'",
-            "GCN": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN runs=1 task='NodeClassification' dataset.GNN.training.epochs=10 dataset.GNN.model='GCN'",
+            "GraphSage": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN runs=1 dataset.GNN.training.epochs=10 dataset.GNN.model='GraphSage'",
+            "GCN": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type=GNN runs=1 dataset.GNN.training.epochs=10 dataset.GNN.model='GCN'",
         },
         "LinkPrediction": {
-            "GraphSage": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN runs=1 task='LinkPrediction' dataset.GNN.training.epochs=2 dataset.GNN.model='GraphSage'",
-            "GCN": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN runs=1 task='LinkPrediction' dataset.GNN.training.epochs=2 dataset.GNN.model='GCN'",
+            "GraphSage": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN runs=1 dataset.GNN.training.epochs=5 dataset.GNN.model='GraphSage'",
+            "GCN": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type=GNN runs=1 dataset.GNN.training.epochs=5 dataset.GNN.model='GCN'",
         },
     },
 }
@@ -155,15 +155,22 @@ def test_shallow_linkprediction():
     assert output["acc"] == 0.5937978029251099
 
 
-# def test_gnn_linkprediction():
-#     completed_process = subprocess.run(endpoints['GNN']['LinkPrediction']['GraphSage'], capture_output=True, shell=True,text=True, check=True)
-#     output = completed_process.stdout
-#     output = ast.literal_eval(output) #1.0114138905597612
-#     assert output['loss'] == 1.0102661845384884
-#     assert output['hits@50'] == 0.006259578233935548
-#     completed_process = subprocess.run(endpoints['GNN']['LinkPrediction']['GCN'], capture_output=True, shell=True,text=True, check=True)
-#     output = completed_process.stdout
-#     output = ast.literal_eval(output)
-#     assert output['loss'] == 1.0085030351438709
-#     assert output['hits@50'] == 0.033067840877204345
-#
+def test_gnn_linkprediction():
+    completed_process = subprocess.run(
+        endpoints["GNN"]["LinkPrediction"]["GraphSage"],
+        capture_output=True,
+        shell=True,
+        text=True,
+        check=True,
+    )
+    output = completed_process.stdout
+    output = ast.literal_eval(output)
+    print(output)
+    assert np.isclose([output["loss"]], [0.6], atol=2e-01) == True
+    completed_process = subprocess.run(
+        endpoints["GNN"]["LinkPrediction"]["GCN"], capture_output=True, shell=True, text=True, check=True
+    )
+    output = completed_process.stdout
+    output = ast.literal_eval(output)
+    print(output)
+    assert np.isclose([output["loss"]], [0.6], atol=2e-01) == True

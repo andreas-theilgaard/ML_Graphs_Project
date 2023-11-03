@@ -4,8 +4,6 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
-
-# from ogb.linkproppred import Evaluator
 from src.models.logger import LoggerClass
 from src.models.utils import set_seed
 from src.models.utils import prepare_metric_cols
@@ -221,7 +219,7 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
     X = x.to(config.device)
 
     # evaluator = Evaluator(name=config.dataset.dataset_name)
-    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.task)
+    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
 
     for seed in seeds:
         set_seed(seed=seed)

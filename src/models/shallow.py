@@ -136,7 +136,7 @@ class ShallowTrainer:
         optimizer.zero_grad()
 
         # Positive edges
-        pos_edge_index = data.edge_index if self.config.task == "NodeClassification" else data
+        pos_edge_index = data.edge_index if self.config.dataset.task == "NodeClassification" else data
         pos_edge_index = pos_edge_index.to(self.config.device)
         pos_out = model(pos_edge_index[0], pos_edge_index[1])
 
@@ -169,7 +169,7 @@ class ShallowTrainer:
             data.edge_index = to_undirected(data.edge_index)
 
         # If task is link prediction only use training edges
-        if self.config.task == "LinkPrediction":
+        if self.config.dataset.task == "LinkPrediction":
             for_link = True
             split_edge = dataset.get_edge_split()
             data = (split_edge["train"]["edge"]).T
@@ -202,7 +202,7 @@ class ShallowTrainer:
         criterion = nn.BCEWithLogitsLoss()
 
         self.Logger.start_run()
-        evaluator = METRICS(metrics_list=self.config.dataset.metrics, task=self.config.task)
+        evaluator = METRICS(metrics_list=self.config.dataset.metrics, task=self.config.dataset.task)
 
         for epoch in prog_bar:
             loss, acc = self.train(

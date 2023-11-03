@@ -1,4 +1,4 @@
-dataset_name: 'ogbn-arxiv'
+dataset_name: 'Cora'
 task: 'NodeClassification'
 metrics: ['acc','f1','roc_auc','precision','recall']
 track_metric: 'acc'

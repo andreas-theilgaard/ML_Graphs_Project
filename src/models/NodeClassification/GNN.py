@@ -77,7 +77,7 @@ class GNN:
 
 def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
-    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.task)
+    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
     data.adj_t = data.adj_t.to_symmetric()
     data = data.to(config.device)
     split_idx = dataset.get_idx_split()

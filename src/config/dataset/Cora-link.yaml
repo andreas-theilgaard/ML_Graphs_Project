@@ -1,7 +1,7 @@
-dataset_name: 'ogbn-arxiv'
-task: 'NodeClassification'
-metrics: ['acc','f1','roc_auc','precision','recall']
-track_metric: 'acc'
+dataset_name: 'Cora'
+task: 'LinkPrediction'
+metrics: ['hits@10','hits@50','hits@100','acc']
+track_metric: 'hits@50'
 
 DownStream:
   saved_embeddings: False
@@ -9,11 +9,12 @@ DownStream:
   use_spectral: False
   K: 16
   training:
-    epochs: 10
+    epochs: 200
     num_layers: 3
-    dropout: 0.5
+    dropout: 0.0
     lr: 0.01
     hidden_channels: 256
+    batch_size: 65536
 
 Node2Vec:
   training:
@@ -33,16 +34,19 @@ GNN:
   training:
     hidden_channels: 256
     num_layers: 3
-    dropout: 0.5
-    lr: 0.01
-    epochs: 5
+    dropout: 0.0
+    lr: 0.001
+    epochs: 400
     use_valedges: True
+    batch_size: 65536
+
 
 Shallow:
   training:
     lr: 0.1
-    epochs: 300
+    epochs: 500
     init_beta: 0.0
     embedding_dim: 2
     init: 'laplacian'
     decode_type: 'dist'
+    batch_size: 65536
