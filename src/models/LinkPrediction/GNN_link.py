@@ -8,6 +8,8 @@ from torch_geometric.nn import GCNConv, SAGEConv
 from tqdm import tqdm
 from src.models.utils import set_seed, prepare_metric_cols
 from src.models.metrics import METRICS
+from src.models.utils import create_path
+from src.data.data_utils import get_link_data_split
 
 
 class SAGE(torch.nn.Module):
@@ -179,18 +181,39 @@ def test(model, predictor, data, split_edge, evaluator, batch_size):
 def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger=None, seeds=None):
     data = dataset[0]
     edge_index = data.edge_index
-    data.edge_weight = data.edge_weight.view(-1).to(torch.float)
+    if "edge_weight" in data:
+        data.edge_weight = data.edge_weight.view(-1).to(torch.float)
     data = T.ToSparseTensor()(data)
-    split_edge = dataset.get_edge_split()
+    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-ppi"]:
+        split_edge = dataset.get_edge_split()
+    elif config.dataset.dataset_name in ["Cora", "Flickr"]:
+        train_data, val_data, test_data = get_link_data_split(data)
+        split_edge = {
+            "train": {"edge": train_data.pos_edge_label_index.T},
+            "valid": {
+                "edge": val_data.pos_edge_label_index.T,
+                "edge_neg": val_data.neg_edge_label_index.T,
+            },
+            "test": {
+                "edge": test_data.pos_edge_label_index.T,
+                "edge_neg": test_data.neg_edge_label_index.T,
+            },
+        }
+
     evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
 
-    if training_args.use_valedges:
+    if config.dataset.dataset_name == "ogbl-collab" and training_args.use_valedges:
         val_edge_index = split_edge["valid"]["edge"].t()
         full_edge_index = torch.cat([edge_index, val_edge_index], dim=-1)
         data.full_adj_t = SparseTensor.from_edge_index(full_edge_index).t()
         data.full_adj_t = data.full_adj_t.to_symmetric()
     else:
         data.full_adj_t = data.adj_t
+
+    if config.dataset.GNN.extra_info:
+        embedding = torch.load(config.dataset[config.model_type].saved_embeddings, map_location=config.device)
+        X = torch.cat([data.x, embedding], dim=-1)
+        data.x = X
 
     data = data.to(config.device)
 
@@ -200,7 +223,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
 
         if config.dataset.GNN.model == "GraphSage":
             model = SAGE(
-                in_channels=data.num_features,
+                in_channels=data.x.shape[1],
                 hidden_channels=training_args.hidden_channels,
                 num_layers=training_args.num_layers,
                 dropout=training_args.dropout,
@@ -208,7 +231,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             ).to(config.device)
         elif config.dataset.GNN.model == "GCN":
             model = GCN(
-                in_channels=data.num_features,
+                in_channels=data.x.shape[1],
                 hidden_channels=training_args.hidden_channels,
                 num_layers=training_args.num_layers,
                 dropout=training_args.dropout,
@@ -262,6 +285,18 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
         model_save_path = save_path + f"/model_{seed}.pth"
         log.info(f"saved model at {model_save_path}")
         torch.save(model.state_dict(), model_save_path)
+        if "save_to_folder" in config:
+            create_path(config.save_to_folder)
+            additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
+            create_path(f"{additional_save_path}")
+            create_path(f"{additional_save_path}/models")
+            MODEL_PATH = f"{additional_save_path}/models/{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}_{model_save_path}"
+            torch.save(model.state_dict(), MODEL_PATH)
+
+    if "save_to_folder" in config:
+        Logger.save_results(
+            additional_save_path + f"/results_{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}.json"
+        )
 
     Logger.save_results(save_path + "/results.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

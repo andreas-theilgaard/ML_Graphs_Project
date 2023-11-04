@@ -1,6 +1,14 @@
 from ogb.linkproppred import Evaluator as eval_link
 from ogb.nodeproppred import Evaluator as eval_class
-from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, precision_score, recall_score
+from sklearn.metrics import (
+    roc_auc_score,
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    auc,
+    roc_curve,
+)
 import torch
 
 
@@ -38,6 +46,10 @@ class METRICS:
 
     def recall(self, y, y_hat):
         return recall_score(y_true=y, y_pred=y_hat, average="micro")
+
+    def auc_metric(self, y, y_hat):
+        fpr, tpr, thresholds = roc_curve(y, y_hat, pos_label=1)
+        return auc(fpr, tpr)
 
     def collect_metrics(self, predictions: dict):
         """
@@ -83,6 +95,8 @@ class METRICS:
                     inner_results[metric] = self.precision(y=y_true, y_hat=y_hat)
                 elif metric == "recall":
                     inner_results[metric] = self.recall(y=y_true, y_hat=y_hat)
+                elif metric == "auc":
+                    inner_results[metric] = self.auc_metric(y=y_true, y_hat=y_hat)
                 elif "hits" in metric:
                     K = int((metric.split("@"))[1])
                     inner_results[metric] = self.hits_k(

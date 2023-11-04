@@ -3,6 +3,7 @@ from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.utils import to_undirected
 from src.models.utils import set_seed
 import torch_geometric.transforms as T
+from torch_geometric.transforms import NormalizeFeatures
 
 
 def get_link_data_split(data, num_test: float = 0.25, num_val: float = 0.25):
@@ -40,4 +41,6 @@ class TorchGeometricDatasets:
     def use_transform(self):
         if self.task == "NodeClassification" and self.model == "GNN":
             return T.ToSparseTensor()
+        elif self.dataset in ["Cora"]:
+            return NormalizeFeatures()
         return None

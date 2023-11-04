@@ -31,7 +31,10 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
 
     """
     data = dataset[0]
-    split_idx = dataset.get_idx_split()
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products"]:
+        split_idx = dataset.get_idx_split()
+    else:
+        split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}
 
     if (
         config.dataset[config.model_type].saved_embeddings
@@ -62,7 +65,6 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
     if len(y.shape) == 1:
         y = y.unsqueeze(1)
 
-    # evaluator = Evaluator(name=config.dataset.dataset_name)
     evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
 
     for seed in seeds:
@@ -78,6 +80,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             dropout=training_args.dropout,
             log=log,
             logger=Logger,
+            apply_batchnorm=training_args.batchnorm,
             config=config,
         )
 
@@ -98,6 +101,9 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
         )
         create_path(f"{additional_save_path}")
-        Logger.save_results(additional_save_path + "/results.json")
+        Logger.save_results(
+            additional_save_path
+            + f"/results_{config.dataset.DownStream.saved_embeddings}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}.json"
+        )
 
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

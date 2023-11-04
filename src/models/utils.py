@@ -53,12 +53,14 @@ def cur_time():
 
 
 def get_k_laplacian_eigenvectors(
+    num_nodes,
     data,
     dataset,
     k,
     is_undirected: bool = True,
     SPARSE_THRESHOLD: int = 100,
     for_link: bool = False,
+    edge_split=None,
 ):
     """
     Computes the k first non-trivial eigenvectors for the normalized laplacian matrix
@@ -79,10 +81,9 @@ def get_k_laplacian_eigenvectors(
         k first non-trivial eigenvectors
     """
     # print("Getting Laplacian eigenvectors")
-    num_nodes = dataset.num_nodes
+    num_nodes = num_nodes
     is_undirected = True
     if for_link:
-        edge_split = dataset.get_edge_split()
         edge_weight_in = ((edge_split["train"]["weight"]).unsqueeze(1)).float()
         edge_index, edge_weight = get_laplacian(
             data, edge_weight_in, normalization="sym", num_nodes=num_nodes

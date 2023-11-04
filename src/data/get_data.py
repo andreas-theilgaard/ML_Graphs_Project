@@ -59,7 +59,7 @@ class DataLoader:
 
     def dataset_summary(self, dataset):
         summary = f"""\n    ===========================
-    Dataset: {dataset.name}:
+    Dataset: {self.dataset}:
     ===========================
     Number of graphs: {len(dataset)} \n
     Number of features: {dataset.num_features} \n

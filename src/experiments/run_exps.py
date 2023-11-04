@@ -56,7 +56,7 @@ def main(config):
 
     # get data
     dataset = DataLoader(
-        task_type=config.task,
+        task_type=config.dataset.task,
         dataset=config.dataset.dataset_name,
         model_name=config.model_type,
         log=log,
@@ -66,7 +66,7 @@ def main(config):
     # Downstream
     ###########################################
     if config.model_type == "DownStream":
-        if config.task == "NodeClassification":
+        if config.dataset.task == "NodeClassification":
             mlp_node_classification(
                 dataset=dataset,
                 config=config,
@@ -76,7 +76,7 @@ def main(config):
                 seeds=seeds,
                 Logger=Logger,
             )
-        elif config.task == "LinkPrediction":
+        elif config.dataset.task == "LinkPrediction":
             mlp_LinkPrediction(
                 dataset=dataset,
                 config=config,
@@ -99,6 +99,7 @@ def main(config):
             edge_index=data.edge_index,
             device=config.device,
             save_path=save_path,
+            config=config,
             embedding_dim=training_args.embedding_dim,
             walk_length=training_args.walk_length,
             walks_per_node=training_args.walks_per_node,
@@ -117,7 +118,7 @@ def main(config):
     # GNN
     ###########################################
     elif config.model_type == "GNN":
-        if config.task == "NodeClassification":
+        if config.dataset.task == "NodeClassification":
             GNN_trainer(
                 dataset=dataset,
                 config=config,
@@ -127,7 +128,7 @@ def main(config):
                 seeds=seeds,
                 Logger=Logger,
             )
-        elif config.task == "LinkPrediction":
+        elif config.dataset.task == "LinkPrediction":
             GNN_link_trainer(
                 dataset=dataset,
                 config=config,

@@ -11,6 +11,8 @@ from torch_geometric.utils import negative_sampling
 from src.models.utils import get_k_laplacian_eigenvectors
 from torch_geometric.utils import to_undirected
 from src.models.metrics import METRICS
+from src.models.utils import create_path
+from src.data.data_utils import get_link_data_split
 
 
 class LinkPredictor(nn.Module):
@@ -189,8 +191,21 @@ class MLP_LinkPrediction:
 
 def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
-    if config.dataset.dataset_name in ["ogbl-collab"]:
+    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-ppi"]:
         split_edge = dataset.get_edge_split()
+    elif config.dataset.dataset_name in ["Cora", "Flickr"]:
+        train_data, val_data, test_data = get_link_data_split(data)
+        split_edge = {
+            "train": {"edge": train_data.pos_edge_label_index.T},
+            "valid": {
+                "edge": val_data.pos_edge_label_index.T,
+                "edge_neg": val_data.neg_edge_label_index.T,
+            },
+            "test": {
+                "edge": test_data.pos_edge_label_index.T,
+                "edge_neg": test_data.neg_edge_label_index.T,
+            },
+        }
 
     if (
         config.dataset[config.model_type].saved_embeddings
@@ -248,4 +263,14 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         Logger.end_run()
 
     Logger.save_results(save_path + "/results.json")
+    if "save_to_folder" in config:
+        create_path(config.save_to_folder)
+        additional_save_path = (
+            f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
+        )
+        create_path(f"{additional_save_path}")
+        Logger.save_results(
+            additional_save_path
+            + f"/results_{config.dataset.DownStream.saved_embeddings}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}.json"
+        )
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

@@ -1,6 +1,7 @@
 import torch
 from torch_geometric.nn import Node2Vec as N2V
 from tqdm import tqdm
+from src.models.utils import create_path
 
 
 class Node2Vec:
@@ -8,6 +9,7 @@ class Node2Vec:
         self,
         edge_index,
         device,
+        config,
         save_path: str,
         embedding_dim: int = 128,
         walk_length: int = 80,
@@ -27,6 +29,7 @@ class Node2Vec:
             num_negative_samples=num_negative_samples,
             sparse=sparse,
         ).to(device)
+        self.config = config
 
     def save_embeddings(self, model):
         self.embedding_save_path = self.save_path + "/embedding.pth"
@@ -47,4 +50,9 @@ class Node2Vec:
         print(
             f"Embeddings have been saved at {self.embedding_save_path} you can now use them for any downstream task"
         )
+        if "save_to_folder" in self.config:
+            create_path(self.config.save_to_folder)
+            additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
+            torch.save(self.model.embedding.weight.data.cpu(), additional_save_path + "/embedding.pth")
+
         return self.model

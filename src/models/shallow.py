@@ -7,6 +7,9 @@ import networkx as nx
 from tqdm import tqdm
 import numpy as np
 from torch.utils.data import DataLoader
+from src.models.utils import create_path
+
+from src.data.data_utils import get_link_data_split
 
 # from ogb.linkproppred import Evaluator
 from src.models.metrics import METRICS
@@ -21,11 +24,13 @@ def decoder(decode_type, beta, z_i, z_j):
         raise ValueError("Decoder method not yet implemented")
 
 
-def initialize_embeddings(data, dataset=None, method="random", dim: int = 8, for_link=False):
-    num_nodes = dataset.num_nodes
+def initialize_embeddings(
+    num_nodes, data, dataset=None, method="random", dim: int = 8, for_link=False, edge_split=None
+):
+    num_nodes = num_nodes
 
     if method == "random":
-        return torch.normal(0, 1, size=(num_nodes, dim))  # torch.rand((num_nodes, dim))
+        return torch.normal(0, 1, size=(num_nodes, dim))
     elif method == "nodestatistics":
         G = nx.from_edgelist(data.edge_index.numpy().T)
         degrees = torch.tensor([deg for _, deg in G.degree()], dtype=torch.float).view(-1, 1)
@@ -33,10 +38,12 @@ def initialize_embeddings(data, dataset=None, method="random", dim: int = 8, for
         X = torch.cat([degrees, centrality], dim=1)
         extras = dim - 2
         if extras > 0:
-            extra_features = torch.normal(0, 1, size=(num_nodes, extras))  # torch.rand((num_nodes, extras))
+            extra_features = torch.normal(0, 1, size=(num_nodes, extras))
         return torch.cat([X, extra_features], dim=1)
     elif method == "laplacian":
-        return get_k_laplacian_eigenvectors(data=data, dataset=dataset, k=dim, for_link=for_link)
+        return get_k_laplacian_eigenvectors(
+            num_nodes=num_nodes, data=data, dataset=dataset, k=dim, for_link=for_link, edge_split=edge_split
+        )
     else:
         raise ValueError(f"method: {method} not implemented yet")
 
@@ -131,7 +138,7 @@ class ShallowTrainer:
     def get_negative_samples(self, edge_index, num_nodes, num_neg_samples):
         return negative_sampling(edge_index, num_neg_samples=num_neg_samples, num_nodes=num_nodes)
 
-    def train(self, model, data, dataset, criterion, optimizer):
+    def train(self, model, data, criterion, optimizer, num_nodes):
         model.train()
         optimizer.zero_grad()
 
@@ -141,7 +148,7 @@ class ShallowTrainer:
         pos_out = model(pos_edge_index[0], pos_edge_index[1])
 
         # Negative edges
-        neg_edge_index = self.get_negative_samples(pos_edge_index, dataset.num_nodes, pos_edge_index.size(1))
+        neg_edge_index = self.get_negative_samples(pos_edge_index, num_nodes, pos_edge_index.size(1))
         neg_edge_index.to(self.config.device)
         neg_out = model(neg_edge_index[0], neg_edge_index[1])
 
@@ -156,14 +163,16 @@ class ShallowTrainer:
         optimizer.step()
         return loss.item(), acc
 
-    def save_embeddings(self, model):
-        self.embedding_save_path = self.save_path + "/embedding.pth"
+    def save_embeddings(self, model, seed):
+        self.embedding_save_path = self.save_path + f"/embedding_seed={seed}.pth"
         torch.save(model.embeddings.weight.data.cpu(), self.embedding_save_path)
 
     def fit(self, dataset, seeds):
         for_link = False
-        set_seed(seeds[0])
+        split_edge = None
         data = dataset[0]
+
+        NUMBER_NODES = data.num_nodes
 
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
@@ -171,72 +180,101 @@ class ShallowTrainer:
         # If task is link prediction only use training edges
         if self.config.dataset.task == "LinkPrediction":
             for_link = True
-            split_edge = dataset.get_edge_split()
+            if self.config.dataset.dataset_name in ["ogbl-collab", "ogbl-ppi"]:
+                split_edge = dataset.get_edge_split()
+            elif self.config.dataset.dataset_name in ["Cora", "Flickr"]:
+                train_data, val_data, test_data = get_link_data_split(data)
+                split_edge = {
+                    "train": {
+                        "edge": train_data.pos_edge_label_index.T,
+                        "weight": torch.ones(train_data.pos_edge_label_index.shape[1]),
+                    },
+                    "valid": {
+                        "edge": val_data.pos_edge_label_index.T,
+                        "edge_neg": val_data.neg_edge_label_index.T,
+                    },
+                    "test": {
+                        "edge": test_data.pos_edge_label_index.T,
+                        "edge_neg": test_data.neg_edge_label_index.T,
+                    },
+                }
+            if "edge_weight" not in data:
+                split_edge["train"]
+
             data = (split_edge["train"]["edge"]).T
-            assert torch.unique(data.flatten()).size(0) == dataset.num_nodes
+            # assert torch.unique(data.flatten()).size(0) == NUMBER_NODES
 
-        init_embeddings = initialize_embeddings(
-            data=data,
-            dataset=dataset,
-            method=self.training_args.init,
-            dim=self.training_args.embedding_dim,
-            for_link=for_link,
-        )
-        init_embeddings = init_embeddings.to(self.config.device)
+        for seed in seeds:
+            set_seed(seed)
 
-        model = ShallowModel(
-            num_nodes=dataset.num_nodes,
-            embedding_dim=self.training_args.embedding_dim,
-            beta=self.training_args.init_beta,
-            init_embeddings=init_embeddings,
-            decoder_type=self.training_args.decode_type,
-            device=self.config.device,
-        )
-        model = model.to(self.config.device)
-
-        optimizer = optim.Adam(list(model.parameters()), lr=self.training_args.lr)
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=10)
-        prog_bar = tqdm(range(self.training_args.epochs))
-
-        # applies sigmoid by default
-        criterion = nn.BCEWithLogitsLoss()
-
-        self.Logger.start_run()
-        evaluator = METRICS(metrics_list=self.config.dataset.metrics, task=self.config.dataset.task)
-
-        for epoch in prog_bar:
-            loss, acc = self.train(
-                model=model,
+            init_embeddings = initialize_embeddings(
+                num_nodes=NUMBER_NODES,
                 data=data,
                 dataset=dataset,
-                criterion=criterion,
-                optimizer=optimizer,
+                method=self.training_args.init,
+                dim=self.training_args.embedding_dim,
+                for_link=for_link,
+                edge_split=split_edge,
             )
-            prog_bar.set_postfix({"loss": loss, "Train Acc.": acc})
-            if for_link:
-                results = test_link(
-                    model=model,
-                    split_edge=split_edge,
-                    evaluator=evaluator,
-                    batch_size=self.training_args.batch_size,
-                    device=self.config.device,
+            init_embeddings = init_embeddings.to(self.config.device)
+
+            model = ShallowModel(
+                num_nodes=NUMBER_NODES,
+                embedding_dim=self.training_args.embedding_dim,
+                beta=self.training_args.init_beta,
+                init_embeddings=init_embeddings,
+                decoder_type=self.training_args.decode_type,
+                device=self.config.device,
+            )
+            model = model.to(self.config.device)
+
+            optimizer = optim.Adam(list(model.parameters()), lr=self.training_args.lr)
+            # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=10)
+            prog_bar = tqdm(range(self.training_args.epochs))
+
+            # applies sigmoid by default
+            criterion = nn.BCEWithLogitsLoss()
+
+            self.Logger.start_run()
+            evaluator = METRICS(metrics_list=self.config.dataset.metrics, task=self.config.dataset.task)
+
+            for epoch in prog_bar:
+                loss, acc = self.train(
+                    model=model, data=data, criterion=criterion, optimizer=optimizer, num_nodes=NUMBER_NODES
                 )
-                self.Logger.add_to_run(loss=loss, results=results)
-                if epoch % 10 == 0:
-                    self.log.info(
-                        f"Epoch {epoch+1}, Train {self.config.dataset.track_metric}: {results['train'][self.config.dataset.track_metric]}, Val {self.config.dataset.track_metric}: {results['val'][self.config.dataset.track_metric]}, Test {self.config.dataset.track_metric}: {results['test'][self.config.dataset.track_metric]}"
+                prog_bar.set_postfix({"loss": loss, "Train Acc.": acc})
+                if for_link:
+                    results = test_link(
+                        model=model,
+                        split_edge=split_edge,
+                        evaluator=evaluator,
+                        batch_size=self.training_args.batch_size,
+                        device=self.config.device,
                     )
+                    self.Logger.add_to_run(loss=loss, results=results)
+                    if epoch % 10 == 0:
+                        self.log.info(
+                            f"Epoch {epoch+1}, Train {self.config.dataset.track_metric}: {results['train'][self.config.dataset.track_metric]}, Val {self.config.dataset.track_metric}: {results['val'][self.config.dataset.track_metric]}, Test {self.config.dataset.track_metric}: {results['test'][self.config.dataset.track_metric]}"
+                        )
 
-            # scheduler.step(loss)
-            # log
-            self.log.info(f"Epoch {epoch + 1}, Loss: {loss:.4f}, Acc: {acc:.4f}")
+                # scheduler.step(loss)
+                # log
+                self.log.info(f"Epoch {epoch + 1}, Loss: {loss:.4f}, Acc: {acc:.4f}")
 
-        self.Logger.end_run()
+            self.Logger.end_run()
+
+            self.save_embeddings(model, seed=seed)
+            if "save_to_folder" in self.config:
+                create_path(self.config.save_to_folder)
+                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
+                create_path(f"{additional_save_path}")
+                torch.save(
+                    model.embeddings.weight.data.cpu(), additional_save_path + f"/embedding_seed={seed}.pth"
+                )
+
         if for_link:
             self.Logger.save_results(self.save_path + "/results.json")
+            if "save_to_folder" in self.config:
+                self.Logger.save_results(additional_save_path + f"/results.json")
 
-        self.save_embeddings(model)
-        self.log.info(
-            f"Embeddings have been saved at {self.embedding_save_path} you can now use them for any downstream task"
-        )
         self.Logger.save_value({"loss": loss, "acc": acc})

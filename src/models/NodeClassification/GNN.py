@@ -6,6 +6,7 @@ from tqdm import tqdm
 import numpy as np
 from src.models.utils import set_seed, prepare_metric_cols
 from src.models.metrics import METRICS
+from src.models.utils import create_path
 
 
 class GNN:
@@ -17,6 +18,7 @@ class GNN:
         out_channels,
         num_layers,
         dropout,
+        apply_batchnorm,
     ):
         self.GNN_type = GNN_type
         self.in_channels = in_channels
@@ -24,6 +26,7 @@ class GNN:
         self.out_channels = out_channels
         self.num_layers = num_layers
         self.dropout = dropout
+        self.apply_batchnorm = apply_batchnorm
 
     def get_gnn_model(self):
         if self.GNN_type == "GCN":
@@ -33,6 +36,7 @@ class GNN:
                 out_channels=self.out_channels,
                 num_layers=self.num_layers,
                 dropout=self.dropout,
+                apply_batchnorm=self.apply_batchnorm,
             )
         elif self.GNN_type == "GraphSage":
             model = SAGE(
@@ -41,6 +45,7 @@ class GNN:
                 out_channels=self.out_channels,
                 num_layers=self.num_layers,
                 dropout=self.dropout,
+                apply_batchnorm=self.apply_batchnorm,
             )
         return model
 
@@ -79,21 +84,32 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
     evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
     data.adj_t = data.adj_t.to_symmetric()
+
+    if config.dataset.GNN.extra_info:
+        embedding = torch.load(config.dataset[config.model_type].saved_embeddings, map_location=config.device)
+        X = torch.cat([data.x, embedding], dim=-1)
+        data.x = X
+
     data = data.to(config.device)
-    split_idx = dataset.get_idx_split()
-    # model.reset_parameters()
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products"]:
+        split_idx = dataset.get_idx_split()
+    else:
+        split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}
     train_idx = split_idx["train"].to(config.device)
+    if len(data.y.shape) == 1:
+        data.y = data.y.unsqueeze(1)
 
     for seed in seeds:
         set_seed(seed)
         Logger.start_run()
         GNN_object = GNN(
             GNN_type=config.dataset[config.model_type].model,
-            in_channels=data.num_features,
+            in_channels=data.x.shape[-1],
             hidden_channels=training_args.hidden_channels,
             out_channels=dataset.num_classes,
             dropout=training_args.dropout,
             num_layers=training_args.num_layers,
+            apply_batchnorm=training_args.batchnorm,
         )
         model = GNN_object.get_gnn_model()
         model = model.to(config.device)
@@ -119,6 +135,19 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
         model_save_path = save_path + f"/model_{seed}.pth"
         log.info(f"saved model at {model_save_path}")
         torch.save(model.state_dict(), model_save_path)
+        if "save_to_folder" in config:
+            create_path(config.save_to_folder)
+            additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
+            create_path(f"{additional_save_path}")
+            create_path(f"{additional_save_path}/models")
+            MODEL_PATH = f"{additional_save_path}/models/{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}_{model_save_path}"
+            torch.save(model.state_dict(), MODEL_PATH)
+
+    if "save_to_folder" in config:
+        Logger.save_results(
+            additional_save_path
+            + f"/results_{config.dataset.GNN.model}_{{config.dataset.GNN.extra_info}}.json"
+        )
 
     Logger.save_value(
         {"loss": loss, f"Test {config.dataset.track_metric}": result["test"][config.dataset.track_metric]}

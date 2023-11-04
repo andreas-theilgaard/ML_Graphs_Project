@@ -14,6 +14,7 @@ DownStream:
     dropout: 0.5
     lr: 0.01
     hidden_channels: 256
+    batchnorm: True
 
 Node2Vec:
   training:
@@ -36,7 +37,9 @@ GNN:
     dropout: 0.5
     lr: 0.01
     epochs: 5
-    use_valedges: True
+    use_valedges: False
+    batchnorm: True
+
 
 Shallow:
   training:

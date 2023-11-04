@@ -13,19 +13,23 @@ class NodeClassifier(nn.Module):
         out_channels: int,
         num_layers: int,
         dropout: float,
+        apply_batchnorm: bool,
     ):
         super(NodeClassifier, self).__init__()
         self.dropout = dropout
+        self.apply_batchnorm = apply_batchnorm
 
         # Create linear and batchnorm layers
         self.linear = nn.ModuleList()
         self.linear.append(torch.nn.Linear(in_channels, hidden_channels))
-        self.batch_norm = torch.nn.ModuleList()
-        self.batch_norm.append(torch.nn.BatchNorm1d(hidden_channels))
+        if self.apply_batchnorm:
+            self.batch_norm = torch.nn.ModuleList()
+            self.batch_norm.append(torch.nn.BatchNorm1d(hidden_channels))
 
         for _ in range(num_layers - 2):
             self.linear.append(torch.nn.Linear(hidden_channels, hidden_channels))
-            self.batch_norm.append(torch.nn.BatchNorm1d(hidden_channels))
+            if self.apply_batchnorm:
+                self.batch_norm.append(torch.nn.BatchNorm1d(hidden_channels))
         self.linear.append(torch.nn.Linear(hidden_channels, out_channels))
 
     def reset_parameters(self):
@@ -37,7 +41,8 @@ class NodeClassifier(nn.Module):
     def forward(self, x):
         for i, lin_layer in enumerate(self.linear[:-1]):
             x = lin_layer(x)
-            x = self.batch_norm[i](x)
+            if self.apply_batchnorm:
+                x = self.batch_norm[i](x)
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.linear[-1](x)
@@ -53,6 +58,7 @@ class MLP_model:
         out_channels: int,
         num_layers: int,
         dropout: float,
+        apply_batchnorm: bool,
         log,
         logger,
         config,
@@ -64,6 +70,7 @@ class MLP_model:
             out_channels=out_channels,
             num_layers=num_layers,
             dropout=dropout,
+            apply_batchnorm=apply_batchnorm,
         )
         self.model.to(device)
         self.log = log
