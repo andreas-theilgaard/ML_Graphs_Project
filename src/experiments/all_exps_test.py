@@ -63,6 +63,9 @@ if __name__ == "__main__":
     #     subprocess.call(f"{CONFIG_SETUP} model_type='GNN' runs=1 dataset.GNN.extra_info={shallow_embedding} dataset.GNN.model='GCN' dataset.GNN.training.epochs=10",shell=True)
 
     # # Run spectral method
-    # subprocess.call(f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings=False dataset.DownStream.using_features=False use_spectral=True dataset.DownStream.training.epochs=10",shell=True)
+    subprocess.call(
+        f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings=False dataset.DownStream.using_features=False dataset.DownStream.use_spectral=True dataset.DownStream.training.epochs=10",
+        shell=True,
+    )
 
     # Run combined method
