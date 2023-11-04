@@ -195,8 +195,10 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         split_edge = dataset.get_edge_split()
     elif config.dataset.dataset_name in ["Cora", "Flickr"]:
         train_data, val_data, test_data = get_link_data_split(data)
+        edge_weight_in = data.edge_weight if "edge_weight" in data else None
+        edge_weight_in = edge_weight_in.float() if edge_weight_in else edge_weight_in
         split_edge = {
-            "train": {"edge": train_data.pos_edge_label_index.T},
+            "train": {"edge": train_data.pos_edge_label_index.T, "weight": edge_weight_in},
             "valid": {
                 "edge": val_data.pos_edge_label_index.T,
                 "edge_neg": val_data.neg_edge_label_index.T,
@@ -228,7 +230,13 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
         x = get_k_laplacian_eigenvectors(
-            data=data, dataset=dataset, k=config.dataset[config.model_type].K, is_undirected=True
+            data=(split_edge["train"]["edge"]).T,
+            dataset=dataset,
+            k=config.dataset[config.model_type].K,
+            is_undirected=True,
+            num_nodes=data.x.shape[0],
+            for_link=True,
+            edge_split=split_edge,
         )
 
     X = x.to(config.device)

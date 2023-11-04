@@ -57,7 +57,13 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
         x = get_k_laplacian_eigenvectors(
-            data=data, dataset=dataset, k=config.dataset[config.model_type].K, is_undirected=True
+            data=data,
+            dataset=dataset,
+            k=config.dataset[config.model_type].K,
+            is_undirected=True,
+            for_link=False,
+            edge_split=split_idx,
+            num_nodes=data.x.shape[0],
         )
 
     X = x.to(config.device)

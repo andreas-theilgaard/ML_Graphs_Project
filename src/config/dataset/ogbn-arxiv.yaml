@@ -31,6 +31,7 @@ Node2Vec:
 
 GNN:
   model: 'GraphSage'
+  extra_info: False
   training:
     hidden_channels: 256
     num_layers: 3

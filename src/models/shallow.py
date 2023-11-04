@@ -184,11 +184,10 @@ class ShallowTrainer:
                 split_edge = dataset.get_edge_split()
             elif self.config.dataset.dataset_name in ["Cora", "Flickr"]:
                 train_data, val_data, test_data = get_link_data_split(data)
+                edge_weight_in = data.edge_weight if "edge_weight" in data else None
+                edge_weight_in = edge_weight_in.float() if edge_weight_in else edge_weight_in
                 split_edge = {
-                    "train": {
-                        "edge": train_data.pos_edge_label_index.T,
-                        "weight": torch.ones(train_data.pos_edge_label_index.shape[1]),
-                    },
+                    "train": {"edge": train_data.pos_edge_label_index.T, "weight": edge_weight_in},
                     "valid": {
                         "edge": val_data.pos_edge_label_index.T,
                         "edge_neg": val_data.neg_edge_label_index.T,
@@ -198,9 +197,6 @@ class ShallowTrainer:
                         "edge_neg": test_data.neg_edge_label_index.T,
                     },
                 }
-            if "edge_weight" not in data:
-                split_edge["train"]
-
             data = (split_edge["train"]["edge"]).T
             # assert torch.unique(data.flatten()).size(0) == NUMBER_NODES
 
