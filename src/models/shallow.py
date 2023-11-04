@@ -269,7 +269,7 @@ class ShallowTrainer:
                 additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
                 create_path(f"{additional_save_path}")
                 torch.save(
-                    model.embeddings.weight.data.cpu(), additional_save_path + f"/embedding_seed={seed}.pth"
+                    model.embeddings.weight.data.cpu(), additional_save_path + f"/embedding_seed_{seed}.pth"
                 )
 
         if for_link:

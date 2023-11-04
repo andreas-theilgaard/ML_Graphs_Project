@@ -101,9 +101,15 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
         )
         create_path(f"{additional_save_path}")
+        saved_embeddings_path = (
+            False
+            if not config.dataset.DownStream.saved_embeddings
+            else (config.dataset.DownStream.saved_embeddings.split("/"))[-1]
+        )
+        print(saved_embeddings_path)
         Logger.save_results(
             additional_save_path
-            + f"/results_{config.dataset.DownStream.saved_embeddings}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}.json"
+            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}.json"
         )
 
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))
