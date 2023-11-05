@@ -39,12 +39,14 @@ class Node2Vec:
         loader = self.model.loader(batch_size=batch_size, shuffle=True, num_workers=num_workers)
         optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr=lr)
         self.model.train()
-        for epoch in tqdm(range(epochs)):
+        prog_bar = tqdm(range(epochs))
+        for epoch in prog_bar:
             for i, (pos_sample, neg_sample) in enumerate(loader):
                 optimizer.zero_grad()
                 loss = self.model.loss(pos_sample.to(self.device), neg_sample.to(self.device))
                 loss.backward()
                 optimizer.step()
+                prog_bar.set_postfix({"loss": loss.item()})
             # Save embedding
         self.save_embeddings(model=self.model)
         print(

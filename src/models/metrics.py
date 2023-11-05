@@ -90,7 +90,7 @@ class METRICS:
                 elif metric == "acc":
                     inner_results[metric] = self.accuracy(y=y_true, y_hat=y_hat)
                 elif metric == "roc_auc":
-                    inner_results[metric] = self.accuracy(y=y_true, y_hat=y_hat)
+                    inner_results[metric] = self.roc_auc(y=y_true, y_hat=y_hat)
                 elif metric == "precision":
                     inner_results[metric] = self.precision(y=y_true, y_hat=y_hat)
                 elif metric == "recall":
