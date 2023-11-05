@@ -32,30 +32,35 @@ if __name__ == "__main__":
 
     # Define paths
     Node2Vec_path = f"results/{conf.task}/{conf.dataset_name}/Node2Vec/Node2Vec_embedding.pth"
-    Shallow_path = f"results/{conf.task}/{conf.dataset_name}/Shallow/"
+    Shallow_path = f"results/{conf.task}/{conf.dataset_name}/Shallow"
 
     # Run Baseline MLP Using Features
-    # subprocess.call(
-    #     f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings=False dataset.DownStream.using_features=True dataset.DownStream.training.epochs=10",
-    #     shell=True,
-    # )
+    subprocess.call(
+        f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings=False dataset.DownStream.using_features=True dataset.DownStream.training.epochs=10",
+        shell=True,
+    )
 
-    # # Run Node2Vec
-    # subprocess.call(f"{CONFIG_SETUP} model_type='Node2Vec' runs=1 dataset.Node2Vec.training.epochs=1",shell=True)
-    # subprocess.call(f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings={Node2Vec_path} dataset.DownStream.using_features=False dataset.DownStream.training.epochs=10",shell=True)
+    # Run Node2Vec
+    subprocess.call(
+        f"{CONFIG_SETUP} model_type='Node2Vec' runs=1 dataset.Node2Vec.training.epochs=1", shell=True
+    )
+    subprocess.call(
+        f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings={Node2Vec_path} dataset.DownStream.using_features=False dataset.DownStream.training.epochs=10",
+        shell=True,
+    )
 
-    # # Run Shallow
-    # subprocess.call(
-    #     f"{CONFIG_SETUP} model_type='Shallow' runs={args.runs} dataset.Shallow.training.epochs=20", shell=True
-    # )
-    # shallow_embeddings = [x for x in os.listdir(Shallow_path) if ".pth" in x]
-    # for shallow_embedding in shallow_embeddings:
-    #     subprocess.call(
-    #         f"{CONFIG_SETUP} model_type='DownStream' runs=1 dataset.DownStream.saved_embeddings={Shallow_path+'/'+shallow_embedding} dataset.DownStream.using_features=False dataset.DownStream.training.epochs=10",
-    #         shell=True,
-    #     )
+    # Run Shallow
+    subprocess.call(
+        f"{CONFIG_SETUP} model_type='Shallow' runs={args.runs} dataset.Shallow.training.epochs=20", shell=True
+    )
+    shallow_embeddings = [x for x in os.listdir(Shallow_path) if ".pth" in x]
+    for shallow_embedding in shallow_embeddings:
+        subprocess.call(
+            f"{CONFIG_SETUP} model_type='DownStream' runs=1 dataset.DownStream.saved_embeddings={Shallow_path+'/'+shallow_embedding} dataset.DownStream.using_features=False dataset.DownStream.training.epochs=10",
+            shell=True,
+        )
 
-    # #Run GNN
+    # Run GNN
     subprocess.call(
         f"{CONFIG_SETUP} model_type='GNN' runs={args.runs} dataset.GNN.model='GraphSage' dataset.GNN.training.epochs=10",
         shell=True,
@@ -64,14 +69,21 @@ if __name__ == "__main__":
         f"{CONFIG_SETUP} model_type='GNN' runs={args.runs} dataset.GNN.model='GCN' dataset.GNN.training.epochs=10",
         shell=True,
     )
-    # for shallow_embedding in shallow_embeddings:
-    #     subprocess.call(f"{CONFIG_SETUP} model_type='GNN' runs=1 dataset.GNN.extra_info={Shallow_path+'/'+shallow_embedding} dataset.GNN.model='GraphSage' dataset.GNN.training.epochs=10",shell=True)
-    #     subprocess.call(f"{CONFIG_SETUP} model_type='GNN' runs=1 dataset.GNN.extra_info={Shallow_path+'/'+shallow_embedding} dataset.GNN.model='GCN' dataset.GNN.training.epochs=10",shell=True)
 
-    # # Run spectral method
-    # subprocess.call(
-    #     f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings=False dataset.DownStream.using_features=False dataset.DownStream.use_spectral=True dataset.DownStream.training.epochs=10",
-    #     shell=True,
-    # )
+    for shallow_embedding in shallow_embeddings:
+        subprocess.call(
+            f"{CONFIG_SETUP} model_type='GNN' runs=1 dataset.GNN.extra_info={Shallow_path+'/'+shallow_embedding} dataset.GNN.model='GraphSage' dataset.GNN.training.epochs=10",
+            shell=True,
+        )
+        subprocess.call(
+            f"{CONFIG_SETUP} model_type='GNN' runs=1 dataset.GNN.extra_info={Shallow_path+'/'+shallow_embedding} dataset.GNN.model='GCN' dataset.GNN.training.epochs=10",
+            shell=True,
+        )
+
+    # Run spectral method
+    subprocess.call(
+        f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings=False dataset.DownStream.using_features=False dataset.DownStream.use_spectral=True dataset.DownStream.training.epochs=10",
+        shell=True,
+    )
 
     # Run combined method

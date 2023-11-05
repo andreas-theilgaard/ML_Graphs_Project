@@ -39,6 +39,4 @@ class SAGE(torch.nn.Module):
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.convs[-1](x, adj_t)
-        return x.log_softmax(
-            dim=-1
-        )  # make such that not return log probabilites but x instead, also make such that no classification head is returned
+        return x.log_softmax(dim=-1)
