@@ -340,9 +340,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             torch.save(model.state_dict(), MODEL_PATH)
 
     if "save_to_folder" in config:
-        Logger.save_results(
-            additional_save_path + f"/results_{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}.json"
-        )
+        Logger.save_results(additional_save_path + f"/results_{config.dataset.GNN.model}_{used_emb}.json")
 
     Logger.save_results(save_path + "/results.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

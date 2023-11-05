@@ -150,9 +150,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
             torch.save(model.state_dict(), MODEL_PATH)
 
     if "save_to_folder" in config:
-        Logger.save_results(
-            additional_save_path + f"/results_{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}.json"
-        )
+        Logger.save_results(additional_save_path + f"/results_{config.dataset.GNN.model}_{used_emb}.json")
 
     Logger.save_value(
         {"loss": loss, f"Test {config.dataset.track_metric}": result["test"][config.dataset.track_metric]}
