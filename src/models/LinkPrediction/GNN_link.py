@@ -240,7 +240,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                 "edge_neg": test_data.neg_edge_label_index.T,
             },
         }
-
+    data = data.to(config.device)
     evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
 
     if config.dataset.dataset_name == "ogbl-collab" and training_args.use_valedges:

@@ -84,6 +84,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
     evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
     data.adj_t = data.adj_t.to_symmetric()
+    data = data.to(config.device)
 
     if config.dataset.GNN.extra_info:
         embedding = torch.load(config.dataset[config.model_type].extra_info, map_location=config.device)
@@ -145,8 +146,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
 
     if "save_to_folder" in config:
         Logger.save_results(
-            additional_save_path
-            + f"/results_{config.dataset.GNN.model}_{{config.dataset.GNN.extra_info}}.json"
+            additional_save_path + f"/results_{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}.json"
         )
 
     Logger.save_value(
