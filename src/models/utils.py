@@ -4,6 +4,11 @@ from pathlib import Path
 import random
 import numpy as np
 from torch_geometric.utils import get_laplacian, to_scipy_sparse_matrix
+from torch_geometric.utils import negative_sampling
+
+
+def get_negative_samples(edge_index, num_nodes, num_neg_samples):
+    return negative_sampling(edge_index, num_neg_samples=num_neg_samples, num_nodes=num_nodes)
 
 
 def prepare_metric_cols(metrics):

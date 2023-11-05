@@ -10,7 +10,7 @@ from src.models.utils import set_seed, prepare_metric_cols
 from src.models.metrics import METRICS
 from src.models.utils import create_path
 from src.data.data_utils import get_link_data_split
-from src.models.combined.combined_link_utils import get_negative_samples
+from src.models.utils import get_negative_samples
 
 
 class SAGE(torch.nn.Module):
