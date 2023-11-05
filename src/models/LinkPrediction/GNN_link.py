@@ -10,6 +10,7 @@ from src.models.utils import set_seed, prepare_metric_cols
 from src.models.metrics import METRICS
 from src.models.utils import create_path
 from src.data.data_utils import get_link_data_split
+from src.models.combined.combined_link_utils import get_negative_samples
 
 
 class SAGE(torch.nn.Module):
@@ -124,6 +125,46 @@ def train(model, predictor, data, split_edge, optimizer, batch_size):
     return total_loss / total_examples
 
 
+# def train(model, predictor, data, split_edge, optimizer, batch_size):
+#     model.train()
+#     predictor.train()
+
+#     pos_train_edge = split_edge["train"]["edge"].to(data.x.device)
+
+#     total_loss = total_examples = 0
+#     for perm in DataLoader(range(pos_train_edge.size(0)), batch_size, shuffle=True):
+#         optimizer.zero_grad()
+
+#         h = model(data.x, data.adj_t)
+
+#         edge = pos_train_edge[perm].t()
+
+#         pos_out = predictor(h[edge[0]], h[edge[1]])
+#         #pos_loss = -torch.log(pos_out + 1e-15).mean()
+
+#         # Just do some trivial random sampling.
+#         #edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
+#         edge = get_negative_samples(edge_index=edge,num_nodes=data.x.shape[0],num_neg_samples=edge.size(1))
+#         neg_out = predictor(h[edge[0]], h[edge[1]])
+#         predictions = torch.cat([pos_out, neg_out], dim=0)
+#         y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(data.x.device)
+#         loss = torch.nn.BCELoss(predictions,y)
+#         #neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
+#         #loss = pos_loss + neg_loss
+#         loss.backward()
+
+#         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+#         torch.nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
+
+#         optimizer.step()
+
+#         num_examples = pos_out.size(0)
+#         total_loss += loss.item() * num_examples
+#         total_examples += num_examples
+
+#     return total_loss / total_examples
+
+
 @torch.no_grad()
 def test(model, predictor, data, split_edge, evaluator, batch_size):
     model.eval()
@@ -211,7 +252,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
         data.full_adj_t = data.adj_t
 
     if config.dataset.GNN.extra_info:
-        embedding = torch.load(config.dataset[config.model_type].saved_embeddings, map_location=config.device)
+        embedding = torch.load(config.dataset[config.model_type].extra_info, map_location=config.device)
         X = torch.cat([data.x, embedding], dim=-1)
         data.x = X
 
@@ -290,7 +331,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
             create_path(f"{additional_save_path}")
             create_path(f"{additional_save_path}/models")
-            MODEL_PATH = f"{additional_save_path}/models/{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}_{model_save_path}"
+            MODEL_PATH = f"{additional_save_path}/models/{config.dataset.GNN.model}_{config.dataset.GNN.extra_info}_model_{seed}.pth"
             torch.save(model.state_dict(), MODEL_PATH)
 
     if "save_to_folder" in config:

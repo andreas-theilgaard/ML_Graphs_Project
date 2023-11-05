@@ -138,7 +138,7 @@ class ShallowTrainer:
     def get_negative_samples(self, edge_index, num_nodes, num_neg_samples):
         return negative_sampling(edge_index, num_neg_samples=num_neg_samples, num_nodes=num_nodes)
 
-    def train(self, model, data, criterion, optimizer, num_nodes):
+    def full_train(self, model, data, criterion, optimizer, num_nodes):
         model.train()
         optimizer.zero_grad()
 
@@ -162,6 +162,41 @@ class ShallowTrainer:
         loss.backward()
         optimizer.step()
         return loss.item(), acc
+
+    def batch_train(self, model, data, criterion, optimizer, num_nodes, batch_size):
+        model.train()
+
+        # Positive edges
+        pos_edge_index = data.edge_index if self.config.dataset.task == "NodeClassification" else data
+        pos_edge_index = pos_edge_index.to(self.config.device)
+
+        loss_list = []
+        acc_list = []
+        for perm in DataLoader(range(pos_edge_index.size(1)), batch_size, shuffle=True):
+            optimizer.zero_grad()
+
+            edge = pos_edge_index[:, perm]
+            pos_out = model(edge[0], edge[1])
+
+            # Negative edges
+            neg_edge_index = self.get_negative_samples(edge, num_nodes, edge.size(1))
+            neg_edge_index = neg_edge_index.to(self.config.device)
+            neg_out = model(neg_edge_index[0], neg_edge_index[1])
+            assert pos_out.shape == neg_out.shape
+
+            # Combining positive and negative edges
+            out = torch.cat([pos_out, neg_out], dim=0)
+            y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(
+                self.config.device
+            )
+            acc = self.metrics(out, y, type="accuracy")
+            loss = criterion(out, y)
+            loss.backward()
+            optimizer.step()
+
+            loss_list.append(loss)
+            acc_list.append(acc)
+        return np.mean(loss_list, np.mean(acc_list))
 
     def save_embeddings(self, model, seed):
         self.embedding_save_path = self.save_path + f"/embedding_seed={seed}.pth"
@@ -235,9 +270,23 @@ class ShallowTrainer:
             evaluator = METRICS(metrics_list=self.config.dataset.metrics, task=self.config.dataset.task)
 
             for epoch in prog_bar:
-                loss, acc = self.train(
-                    model=model, data=data, criterion=criterion, optimizer=optimizer, num_nodes=NUMBER_NODES
-                )
+                if self.training_args.train_batch:
+                    loss, acc = self.batch_train(
+                        model=model,
+                        data=data,
+                        criterion=criterion,
+                        optimizer=optimizer,
+                        num_nodes=NUMBER_NODES,
+                        batch_size=self.training_args.batch_size,
+                    )
+                else:
+                    loss, acc = self.full_train(
+                        model=model,
+                        data=data,
+                        criterion=criterion,
+                        optimizer=optimizer,
+                        num_nodes=NUMBER_NODES,
+                    )
                 prog_bar.set_postfix({"loss": loss, "Train Acc.": acc})
                 if for_link:
                     results = test_link(
@@ -265,7 +314,8 @@ class ShallowTrainer:
                 additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
                 create_path(f"{additional_save_path}")
                 torch.save(
-                    model.embeddings.weight.data.cpu(), additional_save_path + f"/embedding_seed_{seed}.pth"
+                    model.embeddings.weight.data.cpu(),
+                    additional_save_path + f"/shallow_embedding_seed_{seed}.pth",
                 )
 
         if for_link:

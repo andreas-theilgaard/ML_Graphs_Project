@@ -9,12 +9,12 @@ BASE = "python3 src/experiments/run_exps.py --config-name='base.yaml'"
 endpoints = {
     "shallow": {
         "NodeClassification": {
-            "laplacian": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2",
-            "random": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2",
+            "laplacian": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2 dataset.Shallow.training.lr=0.1",
+            "random": f"{BASE} dataset='ogbn-arxiv' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2 dataset.Shallow.training.lr=0.1",
         },
         "LinkPrediction": {
-            "laplacian": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2",
-            "random": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2",
+            "laplacian": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='laplacian' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2 dataset.Shallow.training.lr=0.1",
+            "random": f"{BASE} dataset='ogbl-collab' {DISABLE_HYDRA} model_type='Shallow' runs=1 dataset.Shallow.training.init='random' dataset.Shallow.training.epochs=10 dataset.Shallow.training.embedding_dim=2 dataset.Shallow.training.lr=0.1",
         },
     },
     "DownStream": {
