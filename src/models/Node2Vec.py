@@ -40,7 +40,7 @@ class Node2Vec:
         optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr=lr)
         self.model.train()
         for epoch in tqdm(range(epochs)):
-            for i, (pos_sample, neg_sample) in enumerate(tqdm(loader)):
+            for i, (pos_sample, neg_sample) in enumerate(loader):
                 optimizer.zero_grad()
                 loss = self.model.loss(pos_sample.to(self.device), neg_sample.to(self.device))
                 loss.backward()

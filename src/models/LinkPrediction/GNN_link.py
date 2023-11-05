@@ -332,9 +332,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             create_path(f"{additional_save_path}")
             create_path(f"{additional_save_path}/models")
             used_emb = (
-                (config.dataset.GNN.extra_info.split("/"))[-1]
-                if config.dataset.GNN.extra_info.split
-                else False
+                (config.dataset.GNN.extra_info.split("/"))[-1] if config.dataset.GNN.extra_info else False
             )
             MODEL_PATH = (
                 f"{additional_save_path}/models/{config.dataset.GNN.model}_{used_emb}_model_{seed}.pth"
