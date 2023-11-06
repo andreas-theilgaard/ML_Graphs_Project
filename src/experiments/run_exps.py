@@ -52,6 +52,8 @@ def main(config):
         metrics=prepare_metric_cols(config.dataset.metrics),
         seeds=seeds,
         log=log,
+        track_metric=config.dataset.track_metric,
+        track_best=False if config.model_type != "Shallow" else True,
     )
 
     # get data

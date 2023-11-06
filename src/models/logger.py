@@ -4,9 +4,11 @@ from src.models.metrics import directions
 
 
 class LoggerClass(object):
-    def __init__(self, runs=None, metrics=None, seeds=None, log=None):
+    def __init__(self, runs=None, metrics=None, track_metric=None, seeds=None, log=None, track_best=False):
         self.results = pd.DataFrame()
         self.metrics = metrics
+        self.track_metric = track_metric
+        self.track_best = track_best
         self.runs = runs
         self.current_run = 0
         self.saved_results = None
@@ -14,6 +16,9 @@ class LoggerClass(object):
         self.log = log
         self.saved_values = {}
         self.directions = [directions(x) for x in metrics]
+
+        if self.track_metric and self.track_best:
+            self.best_val = -1
 
     def start_run(self):
         self.current_run += 1
@@ -29,8 +34,13 @@ class LoggerClass(object):
                 results_to_add[x] = loss
             else:
                 results_to_add[x] = results[data_type][metric]
-
         self.X.loc[len(self.X), :] = results_to_add
+
+        if self.track_best and self.track_metric:
+            if results["val"][self.track_metric] > self.best_val:
+                self.best_val = results["val"][self.track_metric]
+                return True
+            return False
 
     def end_run(self):
         self.results = pd.concat([self.results, pd.DataFrame(self.X)])

@@ -174,7 +174,3 @@ def test_gnn_linkprediction():
     output = ast.literal_eval(output)
     print(output)
     assert np.isclose([output["loss"]], [0.6], atol=2e-01) == True
-
-
-if __name__ == "__main__":
-    test_gnn_linkprediction()

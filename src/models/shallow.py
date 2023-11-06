@@ -185,6 +185,7 @@ class ShallowTrainer:
         self.save_path = save_path
         self.log = log
         self.Logger = Logger
+        self.FOLDERS_CREATED = False
 
     def metrics(self, pred, label, type="accuracy"):
         if type == "accuracy":
@@ -324,8 +325,11 @@ class ShallowTrainer:
                 acc_list.append(acc)
             return (np.mean(loss_list), np.mean(acc_list))
 
-    def save_embeddings(self, model, seed):
-        self.embedding_save_path = self.save_path + f"/embedding_seed={seed}.pth"
+    def save_embeddings(self, model, seed, extra=None):
+        if extra:
+            self.embedding_save_path = self.save_path + f"/{extra}_embedding_seed={seed}.pth"
+        else:
+            self.embedding_save_path = self.save_path + f"/embedding_seed={seed}.pth"
         torch.save(model.embeddings.weight.data.cpu(), self.embedding_save_path)
 
     def fit(self, dataset, seeds):
@@ -454,7 +458,20 @@ class ShallowTrainer:
                         )
                     )
 
-                    self.Logger.add_to_run(loss=loss, results=results)
+                    save_model = self.Logger.add_to_run(loss=loss, results=results)
+                    if save_model:
+                        self.save_embeddings(model, seed, extra="best_emb")
+                        if "save_to_folder" in self.config:
+                            if not self.FOLDERS_CREATED:
+                                create_path(self.config.save_to_folder)
+                                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
+                                create_path(f"{additional_save_path}")
+                                self.FOLDERS_CREATED = True
+                            torch.save(
+                                model.embeddings.weight.data.cpu(),
+                                additional_save_path + f"/best_shallow_embedding_seed_{seed}.pth",
+                            )
+
                     if epoch % 10 == 0:
                         self.log.info(
                             f"Epoch {epoch+1}, Train {self.config.dataset.track_metric}: {results['train'][self.config.dataset.track_metric]}, Val {self.config.dataset.track_metric}: {results['val'][self.config.dataset.track_metric]}, Test {self.config.dataset.track_metric}: {results['test'][self.config.dataset.track_metric]}"
@@ -465,9 +482,6 @@ class ShallowTrainer:
 
             self.save_embeddings(model, seed=seed)
             if "save_to_folder" in self.config:
-                create_path(self.config.save_to_folder)
-                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
-                create_path(f"{additional_save_path}")
                 torch.save(
                     model.embeddings.weight.data.cpu(),
                     additional_save_path + f"/shallow_embedding_seed_{seed}.pth",

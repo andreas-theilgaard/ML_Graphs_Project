@@ -49,7 +49,11 @@ if __name__ == "__main__":
 
     # Run Shallow
     subprocess.call(f"{CONFIG_SETUP} model_type='Shallow' runs={args.runs}", shell=True)
-    shallow_embeddings = [x for x in os.listdir(Shallow_path) if ".pth" in x]
+    shallow_embeddings = (
+        [x for x in os.listdir(Shallow_path) if (".pth" in x and "best" in x)]
+        if conf.task == "LinkPrediction"
+        else [x for x in os.listdir(Shallow_path) if (".pth" in x)]
+    )
     for shallow_embedding in shallow_embeddings:
         subprocess.call(
             f"{CONFIG_SETUP} model_type='DownStream' runs=1 dataset.DownStream.saved_embeddings={Shallow_path+'/'+shallow_embedding} dataset.DownStream.using_features=False",
