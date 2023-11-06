@@ -60,13 +60,27 @@ class LoggerClass(object):
             if direction == "+":
                 best_results = results.groupby("Run")[metric].max()
                 if "Test" in metric:
-                    best_val_result_idx = results.groupby("Run")["Val " + (metric.split(" "))[1]].idxmax()
-                    best_test_result = results.loc[best_val_result_idx.to_list(), metric]
+                    try:
+                        best_val_runs = dict(results.groupby("Run").max()["Val " + (metric.split(" "))[1]])
+                        best_test_result = results[
+                            (results["Run"].isin(list(best_val_runs.keys())))
+                            & (results["Val " + (metric.split(" "))[1]].isin(list(best_val_runs.values())))
+                        ][metric]
+                    except:
+                        print("Error encountered")
+                        best_test_result = best_results.copy()
             elif direction == "-":
                 best_results = results.groupby("Run")[metric].min()
                 if "Test" in metric:
-                    best_val_result_idx = results.groupby("Run")["Val " + (metric.split(" "))[1]].idxmin()
-                    best_test_result = results.loc[best_val_result_idx.to_list(), metric]
+                    try:
+                        best_val_runs = dict(results.groupby("Run").min()["Val " + (metric.split(" "))[1]])
+                        best_test_result = results[
+                            (results["Run"].isin(list(best_val_runs.keys())))
+                            & (results["Val " + (metric.split(" "))[1]].isin(list(best_val_runs.values())))
+                        ][metric]
+                    except:
+                        print("Error encountered")
+                        best_test_result = best_results.copy()
             else:
                 raise ValueError("Direction should be either '+' or '-'")
 

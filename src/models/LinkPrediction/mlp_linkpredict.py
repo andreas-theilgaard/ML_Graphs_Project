@@ -242,7 +242,12 @@ class MLP_LinkPrediction:
         prog_bar = tqdm(range(epochs))
 
         for i, epoch in enumerate(prog_bar):
-            loss = self.train(X, split_edge, optimizer, batch_size)
+            loss = (
+                self.train(X, split_edge, optimizer, batch_size)
+                if self.config.dataset.dataset_name != "ogbl-citation2"
+                else self.train_citation(X, split_edge, optimizer, batch_size)
+            )
+
             results = (
                 self.test(X, split_edge=split_edge, evaluator=evaluator, batch_size=batch_size)
                 if self.config.dataset.dataset_name != "ogbl-citation2"
@@ -388,6 +393,6 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         print(saved_embeddings_path)
         Logger.save_results(
             additional_save_path
-            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}_{config.dataset.DownStream.Random}.json"
+            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}_{config.dataset.DownStream.random}.json"
         )
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

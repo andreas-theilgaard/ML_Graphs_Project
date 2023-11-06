@@ -159,7 +159,7 @@ def test_link_citation(config, model, split_edge, evaluator, batch_size, device)
         target_neg = target_neg.view(-1)
         for perm in DataLoader(range(source.size(0)), batch_size):
             src, dst_neg = source[perm], target_neg[perm]
-            neg_preds += [torch.sigmoid(model(src, dst)).squeeze().cpu()]
+            neg_preds += [torch.sigmoid(model(src, dst_neg)).squeeze().cpu()]
         neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
 
         return pos_pred, neg_pred
@@ -200,17 +200,16 @@ class ShallowTrainer:
             model.train()
             optimizer.zero_grad()
 
-            source_edge = split_edge["train"]["source_node"].to(data.x.device)
-            target_edge = split_edge["train"]["target_node"].to(data.x.device)
+            source_edge = split_edge["train"]["source_node"].to(data.device)
+            target_edge = split_edge["train"]["target_node"].to(data.device)
 
             src, dst = source_edge, target_edge
 
             pos_out = model(src, dst)
 
-            dst_neg = self.get_negative_samples(src, num_nodes, src.size())
+            # dst_neg = self.get_negative_samples(src, num_nodes, src.size())
             # # Just do some trivial random sampling.
-            # dst_neg = torch.randint(0, data.num_nodes, src.size(),
-            #                         dtype=torch.long, device=h.device)
+            dst_neg = torch.randint(0, num_nodes, src.size(), dtype=torch.long, device=data.device)
             neg_out = model(src, dst_neg)
 
             out = torch.cat([pos_out, neg_out], dim=0)
@@ -269,9 +268,9 @@ class ShallowTrainer:
                 pos_out = model(src, dst)
 
                 # Just do some trivial random sampling.
-                dst_neg = self.get_negative_samples(src, num_nodes, src.size())
+                # dst_neg = self.get_negative_samples(src, num_nodes, src.size())
 
-                # dst_neg = torch.randint(0, data.num_nodes, src.size(),dtype=torch.long, device=h.device)
+                dst_neg = torch.randint(0, data.num_nodes, src.size(), dtype=torch.long, device=data.x.device)
                 neg_out = model(src, dst_neg)
 
                 out = torch.cat([pos_out, neg_out], dim=0)
@@ -359,7 +358,12 @@ class ShallowTrainer:
                         "edge_neg": test_data.neg_edge_label_index.T,
                     },
                 }
-            data = (split_edge["train"]["edge"]).T
+
+            data = (
+                (split_edge["train"]["edge"]).T
+                if self.config.dataset.dataset_name != "ogbl-citation2"
+                else torch.vstack([split_edge["train"]["source_node"], split_edge["train"]["target_node"]])
+            )
             # assert torch.unique(data.flatten()).size(0) == NUMBER_NODES
             if self.config.dataset.dataset_name == "ogbl-citation2":
                 torch.manual_seed(12345)

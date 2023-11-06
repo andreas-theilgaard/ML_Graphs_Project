@@ -89,12 +89,13 @@ def get_k_laplacian_eigenvectors(
     num_nodes = num_nodes
     is_undirected = True
     if for_link:
-        if isinstance(edge_split["train"]["weight"], torch.Tensor):
-            edge_weight_in = ((edge_split["train"]["weight"])).float()
-            if len(edge_weight_in.shape) == 1:
-                edge_weight_in = edge_weight_in.unsqueeze(1)
-        else:
-            edge_weight_in = edge_split["train"]["weight"]
+        try:
+            if isinstance(edge_split["train"]["weight"], torch.Tensor):
+                edge_weight_in = ((edge_split["train"]["weight"])).float()
+                if len(edge_weight_in.shape) == 1:
+                    edge_weight_in = edge_weight_in.unsqueeze(1)
+        except:
+            edge_weight_in = None
 
         edge_index, edge_weight = get_laplacian(
             data, edge_weight_in, normalization="sym", num_nodes=num_nodes

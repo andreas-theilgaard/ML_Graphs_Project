@@ -124,7 +124,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         print(saved_embeddings_path)
         Logger.save_results(
             additional_save_path
-            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}_{config.dataset.DownStream.Random}.json"
+            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}_{config.dataset.DownStream.random}.json"
         )
 
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

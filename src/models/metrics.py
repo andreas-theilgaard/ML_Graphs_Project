@@ -56,14 +56,14 @@ class METRICS:
     # def roc_auc(self, y, y_hat): #TODO
     #     return roc_auc_score(y_true=y, y_score=y_hat, average="micro")
 
-    def f1(self, y, y_hat):
-        return f1_score(y_true=y, y_pred=y_hat, average="micro")
+    def f1(self, y, y_hat, avg):
+        return f1_score(y_true=y, y_pred=y_hat, average=avg)
 
-    def precision(self, y, y_hat):
-        return precision_score(y_true=y, y_pred=y_hat, average="micro")
+    def precision(self, y, y_hat, avg):
+        return precision_score(y_true=y, y_pred=y_hat, average=avg)
 
-    def recall(self, y, y_hat):
-        return recall_score(y_true=y, y_pred=y_hat, average="micro")
+    def recall(self, y, y_hat, avg):
+        return recall_score(y_true=y, y_pred=y_hat, average=avg)
 
     def auc_metric(self, y, y_hat):
         fpr, tpr, thresholds = roc_curve(y, y_hat, pos_label=1)
@@ -87,7 +87,7 @@ class METRICS:
         for data_type in predictions.keys():
             inner_results = {}
 
-            if self.task == "LinkPrediction":
+            if self.task == "LinkPrediction" and "mrr" not in self.metrics_list:
                 y_hat = torch.cat(
                     [predictions[data_type]["y_pred_pos"], predictions[data_type]["y_pred_neg"]], dim=0
                 )
@@ -103,18 +103,24 @@ class METRICS:
                 y_true = predictions[data_type]["y_true"].cpu()
 
             for metric in self.metrics_list:
-                if metric == "f1":
-                    inner_results[metric] = self.f1(y=y_true, y_hat=y_hat)
+                if metric == "f1-micro":
+                    inner_results[metric] = self.f1(y=y_true, y_hat=y_hat, avg="micro")
                 elif metric == "acc":
                     inner_results[metric] = self.accuracy(y=y_true, y_hat=y_hat)
                 # elif metric == "roc_auc":
                 #    inner_results[metric] = self.roc_auc(y=y_true, y_hat=y_hat)
-                elif metric == "precision":
-                    inner_results[metric] = self.precision(y=y_true, y_hat=y_hat)
-                elif metric == "recall":
-                    inner_results[metric] = self.recall(y=y_true, y_hat=y_hat)
+                elif metric == "precision-micro":
+                    inner_results[metric] = self.precision(y=y_true, y_hat=y_hat, avg="micro")
+                elif metric == "recall-micro":
+                    inner_results[metric] = self.recall(y=y_true, y_hat=y_hat, avg="micro")
                 elif metric == "auc":
                     inner_results[metric] = self.auc_metric(y=y_true, y_hat=y_hat)
+                elif metric == "f1-macro":
+                    inner_results[metric] = self.f1(y=y_true, y_hat=y_hat, avg="macro")
+                elif metric == "recall-macro":
+                    inner_results[metric] = self.recall(y=y_true, y_hat=y_hat, avg="macro")
+                elif metric == "precision-macro":
+                    inner_results[metric] = self.precision(y=y_true, y_hat=y_hat, avg="macro")
                 elif "hits" in metric:
                     K = int((metric.split("@"))[1])
                     inner_results[metric] = self.hits_k(
@@ -122,7 +128,7 @@ class METRICS:
                         y_pred_pos=predictions[data_type]["y_pred_pos"],
                         y_pred_neg=predictions[data_type]["y_pred_neg"],
                     )[metric]
-                elif metric == "roc_auc":
+                elif metric == "rocauc":
                     inner_results[metric] = self.roc_auc(
                         y_pred_pos=predictions[data_type]["y_pred_pos"],
                         y_pred_neg=predictions[data_type]["y_pred_neg"],
