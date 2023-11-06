@@ -92,19 +92,33 @@ class MLP_model:
         with torch.no_grad():
             out = self.model(X)
             y_hat = out.argmax(dim=-1, keepdim=True)
-            predictions = {
-                "train": {"y_true": y[split_idx["train"]], "y_hat": y_hat[split_idx["train"]]},
-                "val": {"y_true": y[split_idx["valid"]], "y_hat": y_hat[split_idx["valid"]]},
-                "test": {"y_true": y[split_idx["test"]], "y_hat": y_hat[split_idx["test"]]},
-            }
+            if self.config.dataset.dataset_name != "ogbn-mag":
+                predictions = {
+                    "train": {"y_true": y[split_idx["train"]], "y_hat": y_hat[split_idx["train"]]},
+                    "val": {"y_true": y[split_idx["valid"]], "y_hat": y_hat[split_idx["valid"]]},
+                    "test": {"y_true": y[split_idx["test"]], "y_hat": y_hat[split_idx["test"]]},
+                }
+            else:
+                y_true_train = y[split_idx["train"]["paper"]]
+                y_true_valid = y[split_idx["valid"]["paper"]]
+                y_true_test = y[split_idx["test"]["paper"]]
+                predictions = {
+                    "train": {"y_true": y_true_train, "y_hat": y_hat[split_idx["train"]["paper"]]},
+                    "val": {"y_true": y_true_valid, "y_hat": y_hat[split_idx["valid"]["paper"]]},
+                    "test": {"y_true": y_true_test, "y_hat": y_hat[split_idx["test"]["paper"]]},
+                }
             results = evaluator.collect_metrics(predictions)
             return results
 
-    def fit(self, X, y, epochs: int, split_idx, evaluator, lr):
+    def fit(self, X, y, epochs: int, split_idx, evaluator, lr, weight_decay):
         # self.model.reset_parameters()
-        train_idx = split_idx["train"].to(self.device)
+        train_idx = (
+            split_idx["train"].to(self.device)
+            if self.config.dataset.dataset_name != "ogbn-mag"
+            else split_idx["train"]["paper"]
+        )
         prog_bar = tqdm(range(epochs))
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
         for i, epoch in enumerate(prog_bar):
             loss = self.train(X=X, y=y, train_idx=train_idx, optimizer=optimizer)
             result = self.test(X=X, y=y, split_idx=split_idx, evaluator=evaluator)

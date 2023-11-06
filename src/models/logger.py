@@ -59,16 +59,29 @@ class LoggerClass(object):
         for metric, direction in zip(metrics, self.directions):
             if direction == "+":
                 best_results = results.groupby("Run")[metric].max()
+                if "Test" in metric:
+                    best_val_result_idx = results.groupby("Run")["Val " + (metric.split(" "))[1]].idxmax()
+                    best_test_result = results.loc[best_val_result_idx.to_list(), metric]
             elif direction == "-":
                 best_results = results.groupby("Run")[metric].min()
+                if "Test" in metric:
+                    best_val_result_idx = results.groupby("Run")["Val " + (metric.split(" "))[1]].idxmin()
+                    best_test_result = results.loc[best_val_result_idx.to_list(), metric]
             else:
                 raise ValueError("Direction should be either '+' or '-'")
+
             last_results = results.groupby("Run")[metric].tail(1)
             arrow = "↓" if direction == "-" else "↑"
             print("")
-            self.log.info(
-                f"""\nMetric: {metric} {arrow}:\n   Best Result: {best_results.mean():.4f} ± {best_results.std():.4f}\n   Last Result: {last_results.mean():.4f} ± {last_results.std():.4f}"""
-            )
+            if "Test" in metric:
+                self.log.info(
+                    f"""\nMetric: {metric} {arrow}:\n   Best Result: {best_results.mean():.4f} ± {best_results.std():.4f}\n   Last Result: {last_results.mean():.4f} ± {last_results.std():.4f}\n   ----------------------------\n   Best Test Result: {best_test_result.mean():.4f} ± {best_test_result.std():.4f}"""
+                )
+
+            else:
+                self.log.info(
+                    f"""\nMetric: {metric} {arrow}:\n   Best Result: {best_results.mean():.4f} ± {best_results.std():.4f}\n   Last Result: {last_results.mean():.4f} ± {last_results.std():.4f}"""
+                )
             print("")
             results_for_metrics[metric] = best_results
 

@@ -26,9 +26,12 @@ class DataLoader:
             "LinkPrediction",
         ], f"Expect task_type to be either 'NodeClassification' or 'LinkPrediction' but received {self.task_type}"
 
-        if self.dataset in ["ogbn-arxiv", "ogbn-products"] and self.task_type == "LinkPrediction":
+        if self.dataset in ["ogbn-arxiv", "ogbn-products", "ogbn-mag"] and self.task_type == "LinkPrediction":
             raise ValueError(f"{self.dataset} can only be used for NodeClassification")
-        if self.dataset in ["ogbl-collab", "ogbl-ppa"] and self.task_type == "NodeClassification":
+        if (
+            self.dataset in ["ogbl-collab", "ogbl-ppa", "ogbl-vessel", "ogbl-citation2"]
+            and self.task_type == "NodeClassification"
+        ):
             raise ValueError(f"{self.dataset} can only be used for LinkPrediction")
 
     def get_NodeClassification_dataset(self):
@@ -38,6 +41,8 @@ class DataLoader:
                 if self.model_name != "GNN"
                 else PygNodePropPredDataset(name=self.dataset, root="data", transform=T.ToSparseTensor())
             )
+        elif self.dataset == "ogbn-mag":
+            dataset = PygNodePropPredDataset(name=self.dataset, root="data")
         elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo", "Twitch"]:
             PYG_DATASETS = TorchGeometricDatasets(
                 dataset=self.dataset, task=self.task_type, model=self.model_name
@@ -47,7 +52,7 @@ class DataLoader:
         return dataset
 
     def get_LinkPrediction_dataset(self):
-        if self.dataset in ["ogbl-collab", "ogbl-ppa"]:
+        if self.dataset in ["ogbl-collab", "ogbl-ppa", "ogbl-vessel", "ogbl-citation2"]:
             dataset = PygLinkPropPredDataset(name=self.dataset, root="data")
         elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo", "Twitch"]:
             PYG_DATASETS = TorchGeometricDatasets(

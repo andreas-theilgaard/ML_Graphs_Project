@@ -1,12 +1,13 @@
 dataset_name: 'ogbn-arxiv'
 task: 'NodeClassification'
-metrics: ['acc','f1','roc_auc','precision','recall']
+metrics: ['acc','f1','precision','recall']
 track_metric: 'acc'
 
 DownStream:
   saved_embeddings: False
   using_features: True
   use_spectral: False
+  random: False
   K: 16
   training:
     epochs: 10
@@ -15,6 +16,7 @@ DownStream:
     lr: 0.01
     hidden_channels: 256
     batchnorm: True
+    weight_decay: 0
 
 Node2Vec:
   training:
@@ -40,6 +42,7 @@ GNN:
     epochs: 5
     use_valedges: False
     batchnorm: True
+    weight_decay: 0
 
 
 Shallow:
@@ -47,7 +50,7 @@ Shallow:
     lr: 0.1
     epochs: 300
     init_beta: 0.0
-    embedding_dim: 64
+    embedding_dim: 2
     init: 'laplacian'
     decode_type: 'dist'
     train_batch: False

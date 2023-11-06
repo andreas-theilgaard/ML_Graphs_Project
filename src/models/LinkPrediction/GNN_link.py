@@ -89,11 +89,48 @@ class LinkPredictor(torch.nn.Module):
         return torch.sigmoid(x)
 
 
-def train(model, predictor, data, split_edge, optimizer, batch_size):
+def train_citation(config, model, predictor, data, split_edge, optimizer, batch_size):
+    model.train()
+    predictor.train()
+
+    source_edge = split_edge["train"]["source_node"].to(data.x.device)
+    target_edge = split_edge["train"]["target_node"].to(data.x.device)
+
+    total_loss = total_examples = 0
+    for perm in DataLoader(range(source_edge.size(0)), batch_size, shuffle=True):
+        optimizer.zero_grad()
+
+        h = model(data.x, data.adj_t)
+
+        src, dst = source_edge[perm], target_edge[perm]
+
+        pos_out = predictor(h[src], h[dst])
+        pos_loss = -torch.log(pos_out + 1e-15).mean()
+
+        # Just do some trivial random sampling.
+        dst_neg = torch.randint(0, data.num_nodes, src.size(), dtype=torch.long, device=h.device)
+        neg_out = predictor(h[src], h[dst_neg])
+        neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
+
+        loss = pos_loss + neg_loss
+        loss.backward()
+        optimizer.step()
+
+        num_examples = pos_out.size(0)
+        total_loss += loss.item() * num_examples
+        total_examples += num_examples
+
+    return total_loss / total_examples
+
+
+def train(config, model, predictor, data, split_edge, optimizer, batch_size):
     model.train()
     predictor.train()
 
     pos_train_edge = split_edge["train"]["edge"].to(data.x.device)
+
+    if config.dataset.dataset_name in ["ogbl-vessel"]:
+        neg_train_edge = split_edge["train"]["edge_neg"].to(data.x.device)
 
     total_loss = total_examples = 0
     for perm in DataLoader(range(pos_train_edge.size(0)), batch_size, shuffle=True):
@@ -107,7 +144,10 @@ def train(model, predictor, data, split_edge, optimizer, batch_size):
         pos_loss = -torch.log(pos_out + 1e-15).mean()
 
         # Just do some trivial random sampling.
-        edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
+        if config.dataset.dataset_name in ["ogbl-vessel"]:
+            edge = neg_train_edge[perm].t()
+        else:
+            edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
         neg_out = predictor(h[edge[0]], h[edge[1]])
         neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
         loss = pos_loss + neg_loss
@@ -166,13 +206,57 @@ def train(model, predictor, data, split_edge, optimizer, batch_size):
 
 
 @torch.no_grad()
-def test(model, predictor, data, split_edge, evaluator, batch_size):
+def test_citation(config, model, predictor, data, split_edge, evaluator, batch_size):
+    predictor.eval()
+
+    h = model(data.x, data.adj_t)
+
+    def test_split(split):
+        source = split_edge[split]["source_node"].to(h.device)
+        target = split_edge[split]["target_node"].to(h.device)
+        target_neg = split_edge[split]["target_node_neg"].to(h.device)
+
+        pos_preds = []
+        for perm in DataLoader(range(source.size(0)), batch_size):
+            src, dst = source[perm], target[perm]
+            pos_preds += [predictor(h[src], h[dst]).squeeze().cpu()]
+        pos_pred = torch.cat(pos_preds, dim=0)
+
+        neg_preds = []
+        source = source.view(-1, 1).repeat(1, 1000).view(-1)
+        target_neg = target_neg.view(-1)
+        for perm in DataLoader(range(source.size(0)), batch_size):
+            src, dst_neg = source[perm], target_neg[perm]
+            neg_preds += [predictor(h[src], h[dst_neg]).squeeze().cpu()]
+        neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
+
+        return pos_pred, neg_pred
+
+    train = test_split("eval_train")
+    valid = test_split("valid")
+    test = test_split("test")
+
+    predictions = {
+        "train": {"y_pred_pos": train[0], "y_pred_neg": train[1]},
+        "val": {"y_pred_pos": valid[0], "y_pred_neg": valid[1]},
+        "test": {"y_pred_pos": test[0], "y_pred_neg": test[1]},
+    }
+    results = evaluator.collect_metrics(predictions)
+
+    return results
+
+
+@torch.no_grad()
+def test(config, model, predictor, data, split_edge, evaluator, batch_size):
     model.eval()
     predictor.eval()
 
     h = model(data.x, data.adj_t)
 
     pos_train_edge = split_edge["train"]["edge"].to(h.device)
+    if config.dataset.dataset_name in ["ogbl-vessel"]:
+        neg_train_edge = split_edge["train"]["edge_neg"].to(h.device)
+
     pos_valid_edge = split_edge["valid"]["edge"].to(h.device)
     neg_valid_edge = split_edge["valid"]["edge_neg"].to(h.device)
     pos_test_edge = split_edge["test"]["edge"].to(h.device)
@@ -183,6 +267,13 @@ def test(model, predictor, data, split_edge, evaluator, batch_size):
         edge = pos_train_edge[perm].t()
         pos_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     pos_train_pred = torch.cat(pos_train_preds, dim=0)
+
+    if config.dataset.dataset_name in ["ogbl-vessel"]:
+        neg_train_preds = []
+        for perm in DataLoader(range(neg_train_edge.size(0)), batch_size):
+            edge = pos_train_edge[perm].t()
+            neg_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+        neg_train_pred = torch.cat(neg_train_preds, dim=0)
 
     pos_valid_preds = []
     for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
@@ -210,11 +301,18 @@ def test(model, predictor, data, split_edge, evaluator, batch_size):
         neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
-    predictions = {
-        "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
-        "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
-        "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
-    }
+    if config.dataset.dataset_name in ["ogbl-vessel"]:
+        predictions = {
+            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_train_pred},
+            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+        }
+    else:
+        predictions = {
+            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+        }
     results = evaluator.collect_metrics(predictions)
     return results
 
@@ -225,9 +323,9 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
     if "edge_weight" in data:
         data.edge_weight = data.edge_weight.view(-1).to(torch.float)
     data = T.ToSparseTensor()(data)
-    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-ppi"]:
+    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-vessel", "ogbl-citation2"]:
         split_edge = dataset.get_edge_split()
-    elif config.dataset.dataset_name in ["Cora", "Flickr"]:
+    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer"]:
         train_data, val_data, test_data = get_link_data_split(data)
         split_edge = {
             "train": {"edge": train_data.pos_edge_label_index.T},
@@ -240,8 +338,24 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                 "edge_neg": test_data.neg_edge_label_index.T,
             },
         }
+    if config.dataset.dataset_name == "ogbl-vessel":
+        # Normalize features
+        data.x[:, 0] = torch.nn.functional.normalize(data.x[:, 0], dim=0)
+        data.x[:, 1] = torch.nn.functional.normalize(data.x[:, 1], dim=0)
+        data.x[:, 2] = torch.nn.functional.normalize(data.x[:, 2], dim=0)
+    if config.dataset.dataset_name == "ogbl-citation2":
+        torch.manual_seed(12345)
+        idx = torch.randperm(split_edge["train"]["source_node"].numel())[:86596]
+        split_edge["eval_train"] = {
+            "source_node": split_edge["train"]["source_node"][idx],
+            "target_node": split_edge["train"]["target_node"][idx],
+            "target_node_neg": split_edge["valid"]["target_node_neg"],
+        }
+
     data = data.to(config.device)
-    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
+    evaluator = METRICS(
+        metrics_list=config.dataset.metrics, task=config.dataset.task, dataset=config.dataset.dataset_name
+    )
 
     if config.dataset.dataset_name == "ogbl-collab" and training_args.use_valedges:
         val_edge_index = split_edge["valid"]["edge"].t()
@@ -278,6 +392,15 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                 dropout=training_args.dropout,
                 out_channels=training_args.hidden_channels,
             ).to(config.device)
+
+            if config.dataset.dataset_name in ["ogbl-vessel", "ogbl-citation2"]:
+                # Pre-compute GCN normalization.
+                adj_t = data.adj_t.set_diag()
+                deg = adj_t.sum(dim=1).to(torch.float)
+                deg_inv_sqrt = deg.pow(-0.5)
+                deg_inv_sqrt[deg_inv_sqrt == float("inf")] = 0
+                adj_t = deg_inv_sqrt.view(-1, 1) * adj_t * deg_inv_sqrt.view(1, -1)
+                data.adj_t = adj_t
         else:
             raise ValueError(f"Model {config.dataset.GNN.model} not implemented")
 
@@ -290,27 +413,58 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
         ).to(config.device)
 
         optimizer = torch.optim.Adam(
-            list(model.parameters()) + list(predictor.parameters()), lr=training_args.lr
+            list(model.parameters()) + list(predictor.parameters()),
+            lr=training_args.lr,
+            weight_decay=training_args.weight_decay if training_args.weight_decay else 0,
         )
+
         prog_bar = tqdm(range(training_args.epochs))
 
         for i, epoch in enumerate(prog_bar):
-            loss = train(
-                model=model,
-                predictor=predictor,
-                data=data,
-                split_edge=split_edge,
-                optimizer=optimizer,
-                batch_size=training_args.batch_size,
+            loss = (
+                train(
+                    config=config,
+                    model=model,
+                    predictor=predictor,
+                    data=data,
+                    split_edge=split_edge,
+                    optimizer=optimizer,
+                    batch_size=training_args.batch_size,
+                )
+                if config.dataset.dataset_name != "ogbl-citation2"
+                else train_citation(
+                    config=config,
+                    model=model,
+                    predictor=predictor,
+                    data=data,
+                    split_edge=split_edge,
+                    optimizer=optimizer,
+                    batch_size=training_args.batch_size,
+                )
             )
-            results = test(
-                model=model,
-                predictor=predictor,
-                data=data,
-                split_edge=split_edge,
-                evaluator=evaluator,
-                batch_size=training_args.batch_size,
+
+            results = (
+                test(
+                    config=config,
+                    model=model,
+                    predictor=predictor,
+                    data=data,
+                    split_edge=split_edge,
+                    evaluator=evaluator,
+                    batch_size=training_args.batch_size,
+                )
+                if config.dataset.dataset_name != "ogbl-citation2"
+                else test_citation(
+                    config=config,
+                    model=model,
+                    predictor=predictor,
+                    data=data,
+                    split_edge=split_edge,
+                    evaluator=evaluator,
+                    batch_size=training_args.batch_size,
+                )
             )
+
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,

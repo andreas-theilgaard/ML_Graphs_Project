@@ -31,7 +31,9 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
 
     """
     data = dataset[0]
-    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products"]:
+    #    x = data.x_dict['paper'] # for ogbn-mag
+
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products", "ogbn-mag"]:
         split_idx = dataset.get_idx_split()
     else:
         split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}
@@ -65,13 +67,19 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             edge_split=split_idx,
             num_nodes=data.x.shape[0],
         )
+    if config.dataset[config.model_type].random:
+        x = torch.normal(0, 1, (data.x.shape[0], 128))
 
     X = x.to(config.device)
+    if config.dataset.dataset_name == "ogbn-mag":
+        y = data.y_dict["paper"]
     y = data.y.to(config.device)
     if len(y.shape) == 1:
         y = y.unsqueeze(1)
 
-    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
+    evaluator = METRICS(
+        metrics_list=config.dataset.metrics, task=config.dataset.task, dataset=config.dataset.dataset_name
+    )
 
     for seed in seeds:
         set_seed(seed=seed)
@@ -97,6 +105,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             split_idx=split_idx,
             evaluator=evaluator,
             lr=training_args.lr,
+            weight_decay=training_args.weight_decay if training_args.weight_decay else 0,
         )
         Logger.end_run()
 
@@ -115,7 +124,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         print(saved_embeddings_path)
         Logger.save_results(
             additional_save_path
-            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}.json"
+            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}_{config.dataset.DownStream.Random}.json"
         )
 
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

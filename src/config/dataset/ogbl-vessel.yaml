@@ -10,21 +10,21 @@ DownStream:
   random: False
   K: 16
   training:
-    epochs: 200
-    num_layers: 3
+    epochs: 100
+    num_layers: 4
     dropout: 0.0
-    lr: 0.01
+    lr: 0.001
     hidden_channels: 256
     batch_size: 65536
     weight_decay: 0
 
 Node2Vec:
   training:
-    embedding_dim: 128
-    walk_length: 80
-    context_size: 20
+    embedding_dim: 64
+    walk_length: 5
+    context_size: 5
     walks_per_node: 10
-    epochs: 5
+    epochs: 2
     lr: 0.01
     batch_size: 256
     num_negative_samples: 1
@@ -38,8 +38,8 @@ GNN:
     hidden_channels: 256
     num_layers: 3
     dropout: 0.0
-    lr: 0.001
-    epochs: 200
+    lr: 0.01
+    epochs: 100
     use_valedges: False
     batch_size: 65536
     weight_decay: 0
@@ -48,9 +48,9 @@ GNN:
 Shallow:
   training:
     lr: 0.1
-    epochs: 2
+    epochs: 200
     init_beta: 0.0
-    embedding_dim: 2
+    embedding_dim: 64
     init: 'laplacian'
     decode_type: 'dist'
     batch_size: 65536

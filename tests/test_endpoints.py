@@ -2,7 +2,7 @@ import subprocess
 import ast
 import numpy as np
 
-DISABLE_HYDRA = "hydra.run.dir=. hydra.output_subdir=null hydra/job_logging=disabled hydra/hydra_logging=disabled debug=True"
+DISABLE_HYDRA = "hydra.run.dir=. hydra.output_subdir=null hydra/job_logging=disabled hydra/hydra_logging=disabled debug=True device='cpu'"
 BASE = "python3 src/experiments/run_exps.py --config-name='base.yaml'"
 
 
@@ -94,7 +94,6 @@ def test_gnn_classification():
     )
     output = completed_process.stdout
     output = ast.literal_eval(output)
-    print(output)
     assert output["loss"] == 1.4672894477844238
     assert output["Test acc"] == 0.5953953459662984
     completed_process = subprocess.run(
@@ -175,3 +174,7 @@ def test_gnn_linkprediction():
     output = ast.literal_eval(output)
     print(output)
     assert np.isclose([output["loss"]], [0.6], atol=2e-01) == True
+
+
+if __name__ == "__main__":
+    test_gnn_linkprediction()

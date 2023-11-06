@@ -19,24 +19,42 @@ def directions(metric):
 
 
 class METRICS:
-    def __init__(self, metrics_list: list, task: str):
+    def __init__(self, metrics_list: list, task: str, dataset):
         self.metrics_list = metrics_list
         self.task = task
-        self.evaluator_link = eval_link(name="ogbl-collab")
-        self.evaluator_class = eval_class(name="ogbn-arxiv")
+        if task == "LinkPrediction":
+            if dataset in ["ogbl-collab", "ogbl-vessel", "ogbl-citation2"]:
+                self.evaluator_link = eval_link(name=dataset)
+            else:
+                self.evaluator_link = eval_link(name="ogbl-collab")
+        if task == "NodeClassification":
+            if dataset in ["ogbn-arxiv"]:
+                self.evaluator_class = eval_class(name=dataset)
+            else:
+                self.evaluator_class = eval_class(name="ogbn-arxiv")
 
     def hits_k(self, y_pred_pos, y_pred_neg, K=50):
         self.evaluator_link.K = K
         return self.evaluator_link.eval({"y_pred_pos": y_pred_pos, "y_pred_neg": y_pred_neg})
 
+    def mrr(self, y_pred_pos, y_pred_neg):
+        return (
+            self.evaluator_link.eval({"y_pred_pos": y_pred_pos, "y_pred_neg": y_pred_neg})["mrr_list"]
+            .mean()
+            .item()
+        )
+
     def ogb_acc(self, y, y_hat):
         return self.evaluator_class.eval({"y_true": y, "y_pred": y_hat})
+
+    def roc_auc(self, y_pred_pos, y_pred_neg):
+        return self.evaluator_link.eval({"y_pred_pos": y_pred_pos, "y_pred_neg": y_pred_neg})["rocauc"]
 
     def accuracy(self, y, y_hat):
         return accuracy_score(y_true=y, y_pred=y_hat)
 
-    def roc_auc(self, y, y_hat):
-        return roc_auc_score(y_true=y, y_pred=y_hat, average="micro")
+    # def roc_auc(self, y, y_hat): #TODO
+    #     return roc_auc_score(y_true=y, y_score=y_hat, average="micro")
 
     def f1(self, y, y_hat):
         return f1_score(y_true=y, y_pred=y_hat, average="micro")
@@ -81,16 +99,16 @@ class METRICS:
                     ]
                 ).numpy()
             elif self.task == "NodeClassification":
-                y_hat = predictions[data_type]["y_hat"]
-                y_true = predictions[data_type]["y_true"]
+                y_hat = predictions[data_type]["y_hat"].cpu()
+                y_true = predictions[data_type]["y_true"].cpu()
 
             for metric in self.metrics_list:
                 if metric == "f1":
                     inner_results[metric] = self.f1(y=y_true, y_hat=y_hat)
                 elif metric == "acc":
                     inner_results[metric] = self.accuracy(y=y_true, y_hat=y_hat)
-                elif metric == "roc_auc":
-                    inner_results[metric] = self.roc_auc(y=y_true, y_hat=y_hat)
+                # elif metric == "roc_auc":
+                #    inner_results[metric] = self.roc_auc(y=y_true, y_hat=y_hat)
                 elif metric == "precision":
                     inner_results[metric] = self.precision(y=y_true, y_hat=y_hat)
                 elif metric == "recall":
@@ -104,6 +122,16 @@ class METRICS:
                         y_pred_pos=predictions[data_type]["y_pred_pos"],
                         y_pred_neg=predictions[data_type]["y_pred_neg"],
                     )[metric]
+                elif metric == "roc_auc":
+                    inner_results[metric] = self.roc_auc(
+                        y_pred_pos=predictions[data_type]["y_pred_pos"],
+                        y_pred_neg=predictions[data_type]["y_pred_neg"],
+                    )
+                elif metric == "mrr":
+                    inner_results[metric] = self.mrr(
+                        y_pred_pos=predictions[data_type]["y_pred_pos"],
+                        y_pred_neg=predictions[data_type]["y_pred_neg"],
+                    )
 
             results[data_type] = inner_results
 

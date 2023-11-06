@@ -10,7 +10,7 @@ DownStream:
   random: False
   K: 16
   training:
-    epochs: 200
+    epochs: 100
     num_layers: 3
     dropout: 0.0
     lr: 0.01
@@ -21,10 +21,10 @@ DownStream:
 Node2Vec:
   training:
     embedding_dim: 128
-    walk_length: 80
+    walk_length: 40
     context_size: 20
     walks_per_node: 10
-    epochs: 5
+    epochs: 1
     lr: 0.01
     batch_size: 256
     num_negative_samples: 1
@@ -32,14 +32,14 @@ Node2Vec:
     num_workers: 4
 
 GNN:
-  model: 'GCN'
+  model: 'GraphSage'
   extra_info: False
   training:
     hidden_channels: 256
     num_layers: 3
     dropout: 0.0
-    lr: 0.001
-    epochs: 200
+    lr: 0.0005
+    epochs: 50
     use_valedges: False
     batch_size: 65536
     weight_decay: 0
@@ -48,9 +48,9 @@ GNN:
 Shallow:
   training:
     lr: 0.1
-    epochs: 2
+    epochs: 200
     init_beta: 0.0
-    embedding_dim: 2
+    embedding_dim: 64
     init: 'laplacian'
     decode_type: 'dist'
     batch_size: 65536

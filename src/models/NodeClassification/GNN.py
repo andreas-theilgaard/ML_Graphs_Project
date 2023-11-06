@@ -7,6 +7,8 @@ import numpy as np
 from src.models.utils import set_seed, prepare_metric_cols
 from src.models.metrics import METRICS
 from src.models.utils import create_path
+from torch_geometric.data import Data
+import torch_geometric.transforms as T
 
 
 class GNN:
@@ -38,6 +40,7 @@ class GNN:
                 dropout=self.dropout,
                 apply_batchnorm=self.apply_batchnorm,
             )
+
         elif self.GNN_type == "GraphSage":
             model = SAGE(
                 in_channels=self.in_channels,
@@ -61,29 +64,52 @@ class GNN:
         return loss.item()
 
     @torch.no_grad()
-    def test(self, model, data, split_idx, evaluator):
+    def test(self, model, data, split_idx, evaluator, config):
         model.eval()
 
         out = model(data.x, data.adj_t)  # data.edge_index
         y_pred = out.argmax(dim=-1, keepdim=True)
 
-        y_true_train = data.y[split_idx["train"]]
-        y_true_valid = data.y[split_idx["valid"]]
-        y_true_test = data.y[split_idx["test"]]
+        if config.dataset.dataset_name == "ogbn-mag":
+            y_true_train = data.y[split_idx["train"]["paper"]]
+            y_true_valid = data.y[split_idx["valid"]["paper"]]
+            y_true_test = data.y[split_idx["test"]["paper"]]
+            predictions = {
+                "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]["paper"]]},
+                "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]["paper"]]},
+                "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]["paper"]]},
+            }
 
-        predictions = {
-            "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]]},
-            "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]]},
-            "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]]},
-        }
+        else:
+            y_true_train = data.y[split_idx["train"]]
+            y_true_valid = data.y[split_idx["valid"]]
+            y_true_test = data.y[split_idx["test"]]
+
+            predictions = {
+                "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]]},
+                "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]]},
+                "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]]},
+            }
         results = evaluator.collect_metrics(predictions)
         return results
 
 
 def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
-    evaluator = METRICS(metrics_list=config.dataset.metrics, task=config.dataset.task)
-    data.adj_t = data.adj_t.to_symmetric()
+    evaluator = METRICS(
+        metrics_list=config.dataset.metrics, task=config.dataset.task, dataset=config.dataset.dataset_name
+    )
+
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-mag"]:
+        if config.dataset.dataset_name == "ogbn-mag":
+            data = Data(
+                x=data.x_dict["paper"],
+                edge_index=data.edge_index_dict[("paper", "cites", "paper")],
+                y=data.y_dict["paper"],
+            )
+            data = T.ToSparseTensor()(data)
+        data.adj_t = data.adj_t.to_symmetric()
+
     data = data.to(config.device)
 
     if config.dataset.GNN.extra_info:
@@ -92,11 +118,16 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
         data.x = X
 
     data = data.to(config.device)
-    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products"]:
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products", "ogbn-mag"]:
         split_idx = dataset.get_idx_split()
     else:
         split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}
-    train_idx = split_idx["train"].to(config.device)
+
+    if config.dataset.dataset_name == "ogbn-mag":
+        train_idx = split_idx["train"]["paper"].to(config.device)
+    else:
+        train_idx = split_idx["train"].to(config.device)
+
     if len(data.y.shape) == 1:
         data.y = data.y.unsqueeze(1)
 
@@ -113,13 +144,31 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
             apply_batchnorm=training_args.batchnorm,
         )
         model = GNN_object.get_gnn_model()
+        if (
+            config.dataset.dataset_name in ["ogbn-products", "ogbn-mag"]
+            and config.dataset[config.model_type].model == "GCN"
+        ):
+            # Pre-compute GCN normalization.
+            adj_t = data.adj_t.set_diag()
+            deg = adj_t.sum(dim=1).to(torch.float)
+            deg_inv_sqrt = deg.pow(-0.5)
+            deg_inv_sqrt[deg_inv_sqrt == float("inf")] = 0
+            adj_t = deg_inv_sqrt.view(-1, 1) * adj_t * deg_inv_sqrt.view(1, -1)
+            data.adj_t = adj_t
+
+        data = data.to(config.device)
         model = model.to(config.device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=training_args.lr)
+
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=training_args.lr,
+            weight_decay=training_args.weight_decay if training_args.weight_decay else 0,
+        )
         prog_bar = tqdm(range(training_args.epochs))
 
         for i, epoch in enumerate(prog_bar):
             loss = GNN_object.train(model, data, train_idx, optimizer)
-            result = GNN_object.test(model, data, split_idx, evaluator)
+            result = GNN_object.test(model, data, split_idx, evaluator, config)
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
