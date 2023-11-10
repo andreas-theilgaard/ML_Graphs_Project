@@ -18,7 +18,7 @@ from src.models.metrics import METRICS
 
 def decoder(decode_type, beta, z_i, z_j):
     if decode_type == "dot":
-        return torch.multiply(z_i, z_j).sum(dim=-1)
+        return (z_i * z_j).sum(dim=-1)
     elif decode_type == "dist":
         return beta - torch.norm(z_i - z_j, dim=-1)
     else:
@@ -339,8 +339,9 @@ class ShallowTrainer:
 
         NUMBER_NODES = data.num_nodes
 
-        if data.is_directed():
-            data.edge_index = to_undirected(data.edge_index)
+        if self.config.dataset.task == "NodeClassification":
+            if data.is_directed():
+                data.edge_index = to_undirected(data.edge_index)
 
         # If task is link prediction only use training edges
         if self.config.dataset.task == "LinkPrediction":
@@ -402,7 +403,11 @@ class ShallowTrainer:
             )
             model = model.to(self.config.device)
 
-            optimizer = optim.Adam(list(model.parameters()), lr=self.training_args.lr)
+            optimizer = optim.Adam(
+                list(model.parameters()),
+                lr=self.training_args.lr,
+                weight_decay=self.training_args.weight_decay,
+            )
             # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=10)
             prog_bar = tqdm(range(self.training_args.epochs))
 

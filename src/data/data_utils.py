@@ -6,8 +6,8 @@ import torch_geometric.transforms as T
 from torch_geometric.transforms import NormalizeFeatures
 
 
-def get_link_data_split(data, num_test: float = 0.25, num_val: float = 0.25):
-    set_seed(42)
+def get_link_data_split(data, num_test: float = 0.1, num_val: float = 0.05):
+    set_seed(1234)
     if data.is_directed():
         data.edge_index = to_undirected(data.edge_index)
     transform = RandomLinkSplit(

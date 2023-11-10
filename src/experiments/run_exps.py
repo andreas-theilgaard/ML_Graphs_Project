@@ -21,6 +21,9 @@ from src.models.LinkPrediction.GNN_link import GNN_link_trainer
 from src.models.Node2Vec import Node2Vec
 from src.models.shallow import ShallowTrainer
 
+# Combined
+from src.models.combined.run_combined_link import fit_combined_link
+from src.models.combined.run_combined_class import fit_combined_class
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -42,7 +45,10 @@ def main(config):
     log.info(f"\nConfigurations for current experiment:\n\nConfiguration: \n {OmegaConf.to_yaml(config)}")
     hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
     model_args = config.dataset[config.model_type]
-    training_args = model_args.training
+    if config.model_type == "combined":
+        training_args = model_args[model_args.type].training
+    else:
+        training_args = model_args.training
     save_path = hydra_cfg["runtime"]["output_dir"]
 
     # get seeds
@@ -157,9 +163,27 @@ def main(config):
     ###########################################
     # Combined
     ###########################################
-    elif config.model_type == "Combined":
-        print("not implemented yet")
-
+    elif config.model_type == "combined":
+        if config.dataset.task == "LinkPrediction":
+            fit_combined_link(
+                config=config,
+                dataset=dataset,
+                training_args=training_args,
+                Logger=Logger,
+                log=log,
+                seeds=seeds,
+                save_path=save_path,
+            )
+        elif config.dataset.task == "NodeClassification":
+            fit_combined_class(
+                config=config,
+                dataset=dataset,
+                training_args=training_args,
+                Logger=Logger,
+                log=log,
+                seeds=seeds,
+                save_path=save_path,
+            )
     else:
         raise ValueError(f"The specified model type, {config.model_type} is not yet supported.")
 

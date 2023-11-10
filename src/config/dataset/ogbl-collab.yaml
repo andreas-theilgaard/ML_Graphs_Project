@@ -32,14 +32,14 @@ Node2Vec:
     num_workers: 4
 
 GNN:
-  model: 'GCN'
+  model: 'GraphSage'
   extra_info: False
   training:
     hidden_channels: 256
     num_layers: 3
     dropout: 0.0
-    lr: 0.001
-    epochs: 200
+    lr: 0.01
+    epochs: 60
     use_valedges: False
     batch_size: 65536
     weight_decay: 0
@@ -48,10 +48,69 @@ GNN:
 Shallow:
   training:
     lr: 0.1
-    epochs: 2
+    epochs: 20
     init_beta: 0.0
-    embedding_dim: 2
+    embedding_dim: 32
     init: 'laplacian'
     decode_type: 'dist'
     batch_size: 65536
     train_batch: False
+    weight_decay: 0
+
+combined:
+  type: 'comb2'
+  comb1:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.005
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.1
+      deep_decode: 'dist'
+
+      balance: False
+      warm_start: 1
+      joint_train: 5
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 65536
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb2:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.001
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+
+      balance: False
+      warm_start: 10
+      joint_train: 5
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 65536
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0

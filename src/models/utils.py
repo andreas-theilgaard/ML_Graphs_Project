@@ -94,6 +94,8 @@ def get_k_laplacian_eigenvectors(
                 edge_weight_in = ((edge_split["train"]["weight"])).float()
                 if len(edge_weight_in.shape) == 1:
                     edge_weight_in = edge_weight_in.unsqueeze(1)
+            else:
+                edge_weight_in = None
         except:
             edge_weight_in = None
 

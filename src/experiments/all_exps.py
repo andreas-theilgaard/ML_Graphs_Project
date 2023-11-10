@@ -81,4 +81,10 @@ if __name__ == "__main__":
         shell=True,
     )
 
+    # run random
+    subprocess.call(
+        f"{CONFIG_SETUP} model_type='DownStream' runs={args.runs} dataset.DownStream.saved_embeddings=False dataset.DownStream.using_features=False use_spectral=False random=True",
+        shell=True,
+    )
+
     # Run combined method

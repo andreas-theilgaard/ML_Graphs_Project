@@ -165,7 +165,8 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
     return total_loss / total_examples
 
 
-# def train(model, predictor, data, split_edge, optimizer, batch_size):
+# def train(config,model, predictor, data, split_edge, optimizer, batch_size):
+#     criterion = torch.nn.BCELoss()
 #     model.train()
 #     predictor.train()
 
@@ -187,8 +188,8 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
 #         edge = get_negative_samples(edge_index=edge,num_nodes=data.x.shape[0],num_neg_samples=edge.size(1))
 #         neg_out = predictor(h[edge[0]], h[edge[1]])
 #         predictions = torch.cat([pos_out, neg_out], dim=0)
-#         y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(data.x.device)
-#         loss = torch.nn.BCELoss(predictions,y)
+#         y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(data.x.device).unsqueeze(1)
+#         loss = criterion(predictions,y)
 #         #neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
 #         #loss = pos_loss + neg_loss
 #         loss.backward()
