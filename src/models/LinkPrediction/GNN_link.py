@@ -11,6 +11,7 @@ from src.models.metrics import METRICS
 from src.models.utils import create_path
 from src.data.data_utils import get_link_data_split
 from src.models.utils import get_negative_samples
+from torch_geometric.utils import to_undirected
 
 
 class SAGE(torch.nn.Module):
@@ -129,9 +130,6 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
 
     pos_train_edge = split_edge["train"]["edge"].to(data.x.device)
 
-    if config.dataset.dataset_name in ["ogbl-vessel"]:
-        neg_train_edge = split_edge["train"]["edge_neg"].to(data.x.device)
-
     total_loss = total_examples = 0
     for perm in DataLoader(range(pos_train_edge.size(0)), batch_size, shuffle=True):
         optimizer.zero_grad()
@@ -143,11 +141,7 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
         pos_out = predictor(h[edge[0]], h[edge[1]])
         pos_loss = -torch.log(pos_out + 1e-15).mean()
 
-        # Just do some trivial random sampling.
-        if config.dataset.dataset_name in ["ogbl-vessel"]:
-            edge = neg_train_edge[perm].t()
-        else:
-            edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
+        edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
         neg_out = predictor(h[edge[0]], h[edge[1]])
         neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
         loss = pos_loss + neg_loss
@@ -269,13 +263,6 @@ def test(config, model, predictor, data, split_edge, evaluator, batch_size):
         pos_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     pos_train_pred = torch.cat(pos_train_preds, dim=0)
 
-    if config.dataset.dataset_name in ["ogbl-vessel"]:
-        neg_train_preds = []
-        for perm in DataLoader(range(neg_train_edge.size(0)), batch_size):
-            edge = pos_train_edge[perm].t()
-            neg_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-        neg_train_pred = torch.cat(neg_train_preds, dim=0)
-
     pos_valid_preds = []
     for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
         edge = pos_valid_edge[perm].t()
@@ -302,18 +289,11 @@ def test(config, model, predictor, data, split_edge, evaluator, batch_size):
         neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
-    if config.dataset.dataset_name in ["ogbl-vessel"]:
-        predictions = {
-            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_train_pred},
-            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
-            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
-        }
-    else:
-        predictions = {
-            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
-            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
-            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
-        }
+    predictions = {
+        "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+        "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+        "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+    }
     results = evaluator.collect_metrics(predictions)
     return results
 
@@ -323,10 +303,15 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
     edge_index = data.edge_index
     if "edge_weight" in data:
         data.edge_weight = data.edge_weight.view(-1).to(torch.float)
-    data = T.ToSparseTensor()(data)
-    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-vessel", "ogbl-citation2"]:
+
+    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-citation2"]:
+        data = T.ToSparseTensor()(data)
         split_edge = dataset.get_edge_split()
-    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer"]:
+
+    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "Twitch"]:
+        if data.is_directed():
+            data.edge_index = to_undirected(data.edge_index)
+
         train_data, val_data, test_data = get_link_data_split(data)
         split_edge = {
             "train": {"edge": train_data.pos_edge_label_index.T},
@@ -339,12 +324,10 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                 "edge_neg": test_data.neg_edge_label_index.T,
             },
         }
-    if config.dataset.dataset_name == "ogbl-vessel":
-        # Normalize features
-        data.x[:, 0] = torch.nn.functional.normalize(data.x[:, 0], dim=0)
-        data.x[:, 1] = torch.nn.functional.normalize(data.x[:, 1], dim=0)
-        data.x[:, 2] = torch.nn.functional.normalize(data.x[:, 2], dim=0)
+
     if config.dataset.dataset_name == "ogbl-citation2":
+        data.adj_t = data.adj_t.to_symmetric()
+        data = data.to(config.device)
         torch.manual_seed(12345)
         idx = torch.randperm(split_edge["train"]["source_node"].numel())[:86596]
         split_edge["eval_train"] = {
@@ -394,7 +377,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                 out_channels=training_args.hidden_channels,
             ).to(config.device)
 
-            if config.dataset.dataset_name in ["ogbl-vessel", "ogbl-citation2"]:
+            if config.dataset.dataset_name in ["ogbl-citation2"]:
                 # Pre-compute GCN normalization.
                 adj_t = data.adj_t.set_diag()
                 deg = adj_t.sum(dim=1).to(torch.float)

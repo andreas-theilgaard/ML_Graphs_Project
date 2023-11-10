@@ -9,7 +9,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from src.models.utils import create_path
 from src.models.utils import prepare_metric_cols
-
+import torch_geometric.transforms as T
 from src.data.data_utils import get_link_data_split
 
 # from ogb.linkproppred import Evaluator
@@ -339,15 +339,15 @@ class ShallowTrainer:
 
         NUMBER_NODES = data.num_nodes
 
-        if self.config.dataset.task == "NodeClassification":
-            if data.is_directed():
-                data.edge_index = to_undirected(data.edge_index)
+        if data.is_directed():
+            data.edge_index = to_undirected(data.edge_index)
 
         # If task is link prediction only use training edges
         if self.config.dataset.task == "LinkPrediction":
             for_link = True
-            if self.config.dataset.dataset_name in ["ogbl-collab", "ogbl-vessel", "ogbl-citation2"]:
+            if self.config.dataset.dataset_name in ["ogbl-collab", "ogbl-citation2"]:
                 split_edge = dataset.get_edge_split()
+
             elif self.config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer"]:
                 train_data, val_data, test_data = get_link_data_split(data)
                 edge_weight_in = data.edge_weight if "edge_weight" in data else None

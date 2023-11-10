@@ -5,6 +5,9 @@ from torch_geometric.nn import SAGEConv, GCNConv
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from src.data.data_utils import get_link_data_split
+import torch_geometric.transforms as T
+from torch_geometric.utils import to_undirected
+from torch_sparse import SparseTensor
 
 
 def freeze_model_params(model):
@@ -735,10 +738,11 @@ def test_indi_with_predictor(
     return (results_shallow, results_deep)
 
 
-def get_split_edge(data, dataset, config):
-    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-vessel", "ogbl-citation2"]:
+def get_split_edge(data, dataset, config, training_args):
+    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-citation2"]:
         split_edge = dataset.get_edge_split()
-    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer"]:
+
+    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "Twitch"]:
         train_data, val_data, test_data = get_link_data_split(data)
         edge_weight_in = data.edge_weight if "edge_weight" in data else None
         edge_weight_in = edge_weight_in.float() if edge_weight_in else edge_weight_in

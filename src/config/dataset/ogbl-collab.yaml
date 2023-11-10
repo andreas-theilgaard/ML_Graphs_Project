@@ -58,7 +58,7 @@ Shallow:
     weight_decay: 0
 
 combined:
-  type: 'comb2'
+  type: 'comb1'
   comb1:
     training:
       shallow_lr: 0.1
@@ -67,6 +67,7 @@ combined:
       init: 'random'
       decode_type: 'dist'
 
+      direct: True
       deep_model: 'GraphSage'
       deep_hidden_channels: 256
       deep_lr: 0.005
@@ -74,10 +75,11 @@ combined:
       deep_num_layers: 3
       deep_dropout: 0.1
       deep_decode: 'dist'
+      gamma: 0.0
 
       balance: False
-      warm_start: 1
-      joint_train: 5
+      warm_start: 100
+      joint_train: 400
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.001
       lambda_lr: 0.01

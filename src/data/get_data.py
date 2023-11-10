@@ -68,8 +68,9 @@ class DataLoader:
     ===========================
     Number of graphs: {len(dataset)} \n
     Number of features: {dataset.num_features} \n
-    Number of classes: {dataset.num_classes}
         """
+        if self.task_type == "NodeClassification":
+            summary += f"Number of classes: {dataset.num_classes}"
         if len(dataset) == 1:
             data = dataset[0]
             summary += f"""

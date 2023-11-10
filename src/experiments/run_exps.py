@@ -6,7 +6,6 @@ from torch_geometric.utils import to_undirected
 from src.models.utils import get_seeds
 from src.models.logger import LoggerClass
 from src.models.utils import prepare_metric_cols
-import sys
 
 # Node Classification
 from src.models.NodeClassification.mlp_nodeclass import mlp_node_classification

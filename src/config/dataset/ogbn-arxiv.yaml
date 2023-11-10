@@ -56,3 +56,62 @@ Shallow:
     train_batch: False
     batch_size: 65536
     weight_decay: 0
+
+
+combined:
+  type: 'comb1'
+  comb1:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.005
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.1
+      deep_decode: 'dist'
+
+      balance: False
+      warm_start: 1
+      joint_train: 5
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 65536
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb2:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.001
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+
+      balance: False
+      warm_start: 10
+      joint_train: 5
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 65536
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0

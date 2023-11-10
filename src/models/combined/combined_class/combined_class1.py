@@ -215,7 +215,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
         )
 
         prog_bar = tqdm(range(training_args.joint_train))
-        for i in prog_bar:
+        for epoch in prog_bar:
             shallow.train()
             deep.train()
             control_model_weights.step(epoch=epoch, shallow=shallow, deep=deep)

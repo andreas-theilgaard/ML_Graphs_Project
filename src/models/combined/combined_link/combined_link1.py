@@ -333,11 +333,14 @@ def fit_combined1_link(config, dataset, training_args, Logger, log, seeds, save_
         data.edge_index = to_undirected(data.edge_index)
     data = data.to(config.device)
 
-    data_shallow, split_edge = get_split_edge(data=data, dataset=dataset, config=config)
+    data_shallow, split_edge = get_split_edge(
+        data=data, dataset=dataset, config=config, training_args=training_args
+    )
 
     if "edge_weight" in data:
         data.edge_weight = data.edge_weight.view(-1).to(torch.float)
     data_deep = T.ToSparseTensor()(data)
+    data_deep.adj_t = data_deep.adj_t.to_symmetric()
     data_deep = data_deep.to(config.device)
 
     for counter, seed in enumerate(seeds):
