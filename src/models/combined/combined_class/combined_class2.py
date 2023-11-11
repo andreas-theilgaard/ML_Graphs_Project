@@ -152,7 +152,7 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
         for epoch in prog_bar:
             deep.train()
             MLP.train()
-            shallow.train()
+            shallow_embeddings.train()
 
             control_model_weights.step(epoch=epoch, shallow=shallow_embeddings, deep=deep)
             optimizer.zero_grad()

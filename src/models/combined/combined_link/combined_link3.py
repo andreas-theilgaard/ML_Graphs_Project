@@ -390,7 +390,7 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
             out_channels=1,
             num_layers=training_args.deep_num_layers,
             dropout=training_args.deep_dropout,
-        )
+        ).to(config.device)
 
         params_combined = [
             {"params": shallow.parameters(), "lr": training_args.shallow_lr_joint},
@@ -408,12 +408,15 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
             shallow_frozen_epochs=training_args.shallow_frozen_epochs,
             deep_frozen_epochs=training_args.deep_frozen_epochs,
         )
+        shallow_embeddings = (shallow.embeddings).to(config.device)
 
         for epoch in prog_bar:
-            shallow.train()
+            shallow_embeddings.train()
             deep.train()
             predictor.train()
-            control_model_weights.step(epoch=epoch, shallow=shallow, deep=deep, predictor=predictor)
+            control_model_weights.step(
+                epoch=epoch, shallow=shallow_embeddings, deep=deep, predictor=predictor
+            )
 
             pos_edge_index = data_shallow
             pos_edge_index = pos_edge_index.to(config.device)
@@ -424,8 +427,8 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
 
                 # get Embeedings from shallow and deep
                 W = deep(data_deep.x, data_deep.adj_t)
-                Z = shallow.embeddings.weight.data.to(config.device)
-                concat_embeddings = torch.cat([Z, W], dim=-1)
+                Z = shallow_embeddings.weight.data.to(config.device)
+                concat_embeddings = torch.cat([Z, W], dim=-1).to(config.device)
 
                 # positive edges
                 edge = pos_edge_index[:, perm]
@@ -460,11 +463,11 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(deep.parameters(), 1.0)
                 torch.nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
-                torch.nn.utils.clip_grad_norm_(shallow.parameters(), 1.0)
+                torch.nn.utils.clip_grad_norm_(shallow_embeddings.parameters(), 1.0)
                 optimizer.step()
 
             results = test_joint_with_emb_combined(
-                shallow=shallow,
+                shallow=shallow_embeddings,
                 deep=deep,
                 predictor=predictor,
                 split_edge=split_edge,

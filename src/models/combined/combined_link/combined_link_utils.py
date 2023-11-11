@@ -465,7 +465,7 @@ def test_joint_with_emb_combined(shallow, deep, predictor, split_edge, x, adj_t,
         neg_test_edge = split_edge["test"]["edge_neg"].to(x.device)
 
         W = deep(x, adj_t)
-        Z = shallow.embeddings.weight.data.to(x.device)
+        Z = shallow.weight.data.to(x.device)
         concat_embeddings = torch.cat([Z, W], dim=-1)
 
         pos_train_preds = []
