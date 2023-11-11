@@ -11,6 +11,7 @@ from src.models.logger import LoggerClass
 from src.models.utils import prepare_metric_cols
 import copy
 from src.models.combined.combined_class.combined_class_utils import NodeClassifier, test_MLP, SAGE, GCN
+from torch_geometric.data import Data
 
 
 def warm_train(
@@ -104,10 +105,19 @@ def fit_warm_start(
 
 def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save_path):
     data = dataset[0]
+    directed = True
+    if config.dataset.dataset_name == "ogbn-mag":
+        data = Data(
+            x=data.x_dict["paper"],
+            edge_index=data.edge_index_dict[("paper", "cites", "paper")],
+            y=data.y_dict["paper"],
+        )
+
     if data.is_directed():
+        directed = False
         data.edge_index = to_undirected(data.edge_index)
 
-    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products"]:
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-mag"]:
         split_idx = dataset.get_idx_split()
     else:
         split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}
@@ -115,15 +125,9 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
     data = data.to(config.device)
     data_deep = copy.deepcopy(data)
     data_deep = T.ToSparseTensor()(data_deep)
-    data_deep.adj_t = data_deep.adj_t.to_symmetric()
+    if not directed:
+        data_deep.adj_t = data_deep.adj_t.to_symmetric()
     data_deep = data_deep.to(config.device)
-
-    Logger = LoggerClass(
-        runs=len(seeds),
-        metrics=prepare_metric_cols(metrics=config.dataset.metrics),
-        seeds=seeds,
-        log=log,
-    )
 
     for counter, seed in enumerate(seeds):
         set_seed(seed)
@@ -138,7 +142,6 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
             dim=training_args.embedding_dim,
             for_link=False,
             edge_split=split_idx,
-            training_args=training_args,
         )
         init_embeddings = init_embeddings.to(config.device)
         shallow = ShallowModel(
@@ -151,7 +154,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
         ).to(config.device)
         if training_args.deep_model == "GraphSage":
             deep = SAGE(
-                n_channels=data.num_features,
+                in_channels=data.num_features,
                 hidden_channels=training_args.deep_hidden_channels,
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
@@ -159,7 +162,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
             ).to(config.device)
         elif training_args.deep_model == "GCN":
             deep = GCN(
-                n_channels=data.num_features,
+                in_channels=data.num_features,
                 hidden_channels=training_args.deep_hidden_channels,
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
@@ -192,6 +195,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
                 optimizer_deep=optimizer_deep,
                 criterion=criterion,
                 gamma=gamma,
+                training_args=training_args,
             )
             shallow.train()
             deep.train()
@@ -312,7 +316,12 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
             loss.backward()
             optimizer.step()
             results = test_MLP(
-                model=Classifier, x=concat_embeddings, y=y, split_idx=split_idx, evaluator=evaluator
+                model=Classifier,
+                x=concat_embeddings,
+                y=y,
+                split_idx=split_idx,
+                evaluator=evaluator,
+                config=config,
             )
             Logger.add_to_run(loss=loss.item(), results=results)
 

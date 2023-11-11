@@ -1,4 +1,4 @@
-dataset_name: 'ogbn-arxiv'
+dataset_name: 'ogbn-mag'
 task: 'NodeClassification'
 metrics: ['acc','f1-micro','f1-macro']
 track_metric: 'acc'
@@ -10,12 +10,12 @@ DownStream:
   random: False
   K: 16
   training:
-    epochs: 100
+    epochs: 500
     num_layers: 3
-    dropout: 0.5
+    dropout: 0.0
     lr: 0.01
     hidden_channels: 256
-    batchnorm: True
+    batchnorm: False
     weight_decay: 0
 
 Node2Vec:
@@ -24,7 +24,7 @@ Node2Vec:
     walk_length: 80
     context_size: 20
     walks_per_node: 10
-    epochs: 5
+    epochs: 3
     lr: 0.01
     batch_size: 256
     num_negative_samples: 1
@@ -36,12 +36,11 @@ GNN:
   extra_info: False
   training:
     hidden_channels: 256
-    num_layers: 3
+    num_layers: 2
     dropout: 0.5
     lr: 0.01
-    epochs: 5
-    use_valedges: False
-    batchnorm: True
+    epochs: 100
+    batchnorm: False
     weight_decay: 0
 
 
@@ -59,7 +58,7 @@ Shallow:
 
 
 combined:
-  type: 'comb2'
+  type: 'comb1'
   comb1:
     training:
       shallow_lr: 0.1
@@ -105,6 +104,7 @@ combined:
       decode_type: 'dist'
       SHALLOW_WARM_START: 1
       SHALLOW_TRAIN_BATCH: False
+      SHALLOW_WARM_BATCH_SIZE: 65536
 
 
       deep_model: 'GraphSage'

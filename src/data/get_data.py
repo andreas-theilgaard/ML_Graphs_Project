@@ -35,7 +35,7 @@ class DataLoader:
             raise ValueError(f"{self.dataset} can only be used for LinkPrediction")
 
     def get_NodeClassification_dataset(self):
-        if self.dataset in ["ogbn-arxiv", "ogbn-products"]:
+        if self.dataset in ["ogbn-arxiv"]:
             dataset = (
                 PygNodePropPredDataset(name=self.dataset, root="data")
                 if self.model_name != "GNN"
@@ -75,9 +75,9 @@ class DataLoader:
             data = dataset[0]
             summary += f"""
     Number of nodes: {data.num_nodes} \n
-    Number of edges: {data.num_edges} \n
-    Is undirected: {data.is_undirected()}
-            """
+    Number of edges: {data.num_edges} \n"""
+        if self.dataset != "ogbn-mag":
+            summary += f"""Is undirected: {data.is_undirected()}"""
         if self.log:
             self.log.info(summary)
 

@@ -214,6 +214,18 @@ def warm_train(
             0, data_deep.x.shape[0], pos_edge_index[0].size(), dtype=torch.long, device=config.device
         )
         neg_out_shallow = shallow(pos_edge_index[0], dst_neg)
+        if training_args.direct:
+            # Negative edges
+            neg_out_deep = deep(data_deep.x, data_deep.adj_t, pos_edge_index[0], dst_neg)
+        else:
+            # Negative edges
+            neg_out_deep = decode(
+                W=W,
+                node_i=pos_edge_index[0],
+                node_j=dst_neg,
+                gamma=gamma,
+                type_=training_args.deep_decode,
+            )
 
     else:
         neg_edge_index = get_negative_samples(pos_edge_index, data_deep.x.shape[0], pos_edge_index.size(1))
@@ -328,8 +340,10 @@ def fit_warm_start(
 
 def fit_combined1_link(config, dataset, training_args, Logger, log, seeds, save_path):
     gamma = None
+    undirected = True
     data = dataset[0]
     if data.is_directed():
+        undirected = False
         data.edge_index = to_undirected(data.edge_index)
     data = data.to(config.device)
 
@@ -340,7 +354,8 @@ def fit_combined1_link(config, dataset, training_args, Logger, log, seeds, save_
     if "edge_weight" in data:
         data.edge_weight = data.edge_weight.view(-1).to(torch.float)
     data_deep = T.ToSparseTensor()(data)
-    data_deep.adj_t = data_deep.adj_t.to_symmetric()
+    if not undirected:
+        data_deep.adj_t = data_deep.adj_t.to_symmetric()
     data_deep = data_deep.to(config.device)
 
     for counter, seed in enumerate(seeds):
@@ -510,6 +525,19 @@ def fit_combined1_link(config, dataset, training_args, Logger, log, seeds, save_
                     0, data_deep.x.shape[0], pos_edge_index[0].size(), dtype=torch.long, device=config.device
                 )
                 neg_out_shallow = shallow(pos_edge_index[0], dst_neg)
+
+                if training_args.direct:
+                    # Negative edges
+                    neg_out_deep = deep(data_deep.x, data_deep.adj_t, pos_edge_index[0], dst_neg)
+                else:
+                    # Negative edges
+                    neg_out_deep = decode(
+                        W=W,
+                        node_i=pos_edge_index[0],
+                        node_j=dst_neg,
+                        gamma=gamma,
+                        type_=training_args.deep_decode,
+                    )
 
             else:
                 neg_edge_index = get_negative_samples(

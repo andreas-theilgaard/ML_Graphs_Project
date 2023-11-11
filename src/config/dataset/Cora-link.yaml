@@ -1,20 +1,20 @@
 dataset_name: 'Cora'
 task: 'LinkPrediction'
-metrics: ['hits@10','hits@50','hits@100','acc']
-track_metric: 'hits@50'
+metrics: ['hits@10','hits@50','hits@100','acc','auc']
+track_metric: 'auc'
 
 DownStream:
-  saved_embeddings: False
-  using_features: True
+  saved_embeddings: 'outputs/LinkPrediction/Cora/Shallow/2023-11-04/03-55-57/embedding.pth'
+  using_features: False
   use_spectral: False
   K: 16
   training:
     epochs: 200
     num_layers: 3
-    dropout: 0.0
+    dropout: 0.5
     lr: 0.01
-    hidden_channels: 256
-    batch_size: 65536
+    hidden_channels: 128
+    batch_size: 256
 
 Node2Vec:
   training:
@@ -31,22 +31,148 @@ Node2Vec:
 
 GNN:
   model: 'GraphSage'
+  extra_info: False
   training:
-    hidden_channels: 256
-    num_layers: 3
+    hidden_channels: 8
+    num_layers: 2
     dropout: 0.0
-    lr: 0.001
-    epochs: 400
-    use_valedges: True
-    batch_size: 65536
+    lr: 0.01
+    epochs: 500
+    use_valedges: False
+    batch_size: 1024
+    weight_decay: 0
 
 
 Shallow:
   training:
     lr: 0.1
-    epochs: 500
+    epochs: 1000
     init_beta: 0.0
-    embedding_dim: 2
+    embedding_dim: 8
     init: 'laplacian'
     decode_type: 'dist'
-    batch_size: 65536
+    batch_size: 256
+    train_batch: False
+    weight_decay: 0.00001
+
+
+
+combined:
+  type: 'comb4'
+  comb1:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'laplacian'
+      decode_type: 'dist'
+
+      direct: True
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.1
+      deep_decode: 'dist'
+      gamma: 0.0
+
+      balance: False
+      warm_start: 100
+      joint_train: 100
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 512
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb2:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+
+      balance: False
+      warm_start: 1
+      joint_train: 1
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 512
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb3:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+
+      balance: False
+      warm_start: 1
+      joint_train: 1
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 512
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb4:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+      direct: True
+      gamma: 0.0
+      deep_decode: 'dist'
+
+
+      balance: False
+      warm_start: 1
+      joint_train: 1
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.01
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 512
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0

@@ -478,7 +478,7 @@ def test_joint_with_emb_combined(shallow, deep, predictor, split_edge, x, adj_t,
         pos_valid_preds = []
         for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
             edge = pos_valid_edge[perm].t()
-            deep_o = predictor(W[edge[0]], W[edge[1]]).squeeze().cpu()
+            deep_o = predictor(concat_embeddings[edge[0]], concat_embeddings[edge[1]]).squeeze().cpu()
             pos_valid_preds += [torch.sigmoid(deep_o)]
         pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
 

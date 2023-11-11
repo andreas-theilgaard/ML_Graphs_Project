@@ -115,7 +115,7 @@ class MLP_model:
         train_idx = (
             split_idx["train"].to(self.device)
             if self.config.dataset.dataset_name != "ogbn-mag"
-            else split_idx["train"]["paper"]
+            else split_idx["train"]["paper"].to(self.device)
         )
         prog_bar = tqdm(range(epochs))
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)

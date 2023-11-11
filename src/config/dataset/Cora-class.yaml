@@ -1,7 +1,7 @@
 dataset_name: 'Cora'
 task: 'NodeClassification'
-metrics: ['acc','f1','roc_auc','precision','recall']
-track_metric: 'acc'
+metrics: ['acc','f1','precision','recall']
+track_metric: 'f1'
 
 DownStream:
   saved_embeddings: False
@@ -9,19 +9,21 @@ DownStream:
   use_spectral: False
   K: 16
   training:
-    epochs: 10
-    num_layers: 3
+    epochs: 200
+    num_layers: 2
     dropout: 0.5
     lr: 0.01
-    hidden_channels: 256
+    hidden_channels: 128
+    batchnorm: False
+
 
 Node2Vec:
   training:
     embedding_dim: 128
-    walk_length: 80
-    context_size: 20
+    walk_length: 20
+    context_size: 10
     walks_per_node: 10
-    epochs: 5
+    epochs: 200
     lr: 0.01
     batch_size: 256
     num_negative_samples: 1
@@ -29,20 +31,24 @@ Node2Vec:
     num_workers: 4
 
 GNN:
-  model: 'GraphSage'
+  model: 'GCN'
+  extra_info: False
   training:
-    hidden_channels: 256
-    num_layers: 3
+    hidden_channels: 128
+    num_layers: 2
     dropout: 0.5
     lr: 0.01
-    epochs: 5
-    use_valedges: True
+    epochs: 200
+    batchnorm: False
+    weight_decay: 0.0005
 
 Shallow:
   training:
     lr: 0.1
-    epochs: 300
+    epochs: 500
     init_beta: 0.0
-    embedding_dim: 2
-    init: 'laplacian'
+    embedding_dim: 64
+    init: 'random'
     decode_type: 'dist'
+    train_batch: False
+    batch_size: 1024

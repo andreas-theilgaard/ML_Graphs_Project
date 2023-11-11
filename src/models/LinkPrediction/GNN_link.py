@@ -249,8 +249,6 @@ def test(config, model, predictor, data, split_edge, evaluator, batch_size):
     h = model(data.x, data.adj_t)
 
     pos_train_edge = split_edge["train"]["edge"].to(h.device)
-    if config.dataset.dataset_name in ["ogbl-vessel"]:
-        neg_train_edge = split_edge["train"]["edge_neg"].to(h.device)
 
     pos_valid_edge = split_edge["valid"]["edge"].to(h.device)
     neg_valid_edge = split_edge["valid"]["edge_neg"].to(h.device)

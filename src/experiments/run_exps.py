@@ -6,6 +6,7 @@ from torch_geometric.utils import to_undirected
 from src.models.utils import get_seeds
 from src.models.logger import LoggerClass
 from src.models.utils import prepare_metric_cols
+from torch_geometric.data import Data
 
 # Node Classification
 from src.models.NodeClassification.mlp_nodeclass import mlp_node_classification
@@ -99,8 +100,15 @@ def main(config):
     ###########################################
     elif config.model_type == "Node2Vec":
         data = dataset[0]
+        if config.dataset.dataset_name == "ogbn-mag":
+            data = Data(
+                x=data.x_dict["paper"],
+                edge_index=data.edge_index_dict[("paper", "cites", "paper")],
+                y=data.y_dict["paper"],
+            )
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index, num_nodes=data.num_nodes)
+
         # If LinkPrediciton should problably do some more here
         model = Node2Vec(
             edge_index=data.edge_index,

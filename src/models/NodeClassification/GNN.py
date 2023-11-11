@@ -109,6 +109,12 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
             )
             data = T.ToSparseTensor()(data)
         data.adj_t = data.adj_t.to_symmetric()
+    else:
+        if data.is_directed():
+            data = T.ToSparseTensor()(data)
+            data.adj_t = data.adj_t.to_symmetric()
+        else:
+            data = T.ToSparseTensor()(data)
 
     data = data.to(config.device)
 
@@ -118,7 +124,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
         data.x = X
 
     data = data.to(config.device)
-    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products", "ogbn-mag"]:
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-mag"]:
         split_idx = dataset.get_idx_split()
     else:
         split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}

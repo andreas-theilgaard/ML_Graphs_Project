@@ -9,6 +9,7 @@ from src.models.utils import prepare_metric_cols
 from src.models.utils import get_k_laplacian_eigenvectors
 from torch_geometric.utils import to_undirected
 from src.models.metrics import METRICS
+from torch_geometric.data import Data
 
 
 def mlp_node_classification(dataset, config, training_args, log, save_path, seeds, Logger):
@@ -31,9 +32,14 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
 
     """
     data = dataset[0]
-    #    x = data.x_dict['paper'] # for ogbn-mag
+    if config.dataset.dataset_name == "ogbn-mag":
+        data = Data(
+            x=data.x_dict["paper"],
+            edge_index=data.edge_index_dict[("paper", "cites", "paper")],
+            y=data.y_dict["paper"],
+        )
 
-    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-products", "ogbn-mag"]:
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-mag"]:
         split_idx = dataset.get_idx_split()
     else:
         split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}
@@ -71,8 +77,6 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         x = torch.normal(0, 1, (data.x.shape[0], 128))
 
     X = x.to(config.device)
-    if config.dataset.dataset_name == "ogbn-mag":
-        y = data.y_dict["paper"]
     y = data.y.to(config.device)
     if len(y.shape) == 1:
         y = y.unsqueeze(1)

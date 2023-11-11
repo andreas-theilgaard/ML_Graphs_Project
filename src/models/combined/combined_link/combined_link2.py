@@ -40,7 +40,7 @@ def test_link_citation(
         for perm in DataLoader(range(source.size(0)), training_args.batch_size):
             src, dst = source[perm], target[perm]
             out_shallow = shallow(src, dst)
-            out_deep = predictor(W[src[0]], W[dst[1]])
+            out_deep = predictor(W[src], W[dst])
             pred = torch.sigmoid(out_shallow + lambda_ * out_deep)
             pos_preds += [pred.squeeze().cpu()]
         pos_pred = torch.cat(pos_preds, dim=0)
@@ -52,7 +52,7 @@ def test_link_citation(
         for perm in DataLoader(range(source.size(0)), training_args.batch_size):
             src, dst_neg = source[perm], target_neg[perm]
             out_shallow = shallow(src, dst_neg)
-            out_deep = predictor(W[src[0]], W[dst_neg[1]])
+            out_deep = predictor(W[src], W[dst_neg])
             pred = torch.sigmoid(out_shallow + lambda_ * out_deep)
             neg_preds += [pred.squeeze().cpu()]
         neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
@@ -90,7 +90,7 @@ def test_link_citation_indi(
         for perm in DataLoader(range(source.size(0)), training_args.batch_size):
             src, dst = source[perm], target[perm]
             pos_preds_shallow += [torch.sigmoid(shallow(src, dst)).squeeze().cpu()]
-            out_deep = predictor(W[src[0]], W[dst[1]])
+            out_deep = predictor(W[src], W[dst])
             pos_preds_deep += [torch.sigmoid(out_deep).squeeze().cpu()]
 
         pos_pred_shallow = torch.cat(pos_preds_shallow, dim=0)
@@ -105,7 +105,7 @@ def test_link_citation_indi(
         for perm in DataLoader(range(source.size(0)), training_args.batch_size):
             src, dst_neg = source[perm], target_neg[perm]
             neg_preds_shallow += [torch.sigmoid(shallow(src, dst_neg)).squeeze().cpu()]
-            out_deep = predictor(W[src[0]], W[dst_neg[1]])
+            out_deep = predictor(W[src], W[dst_neg])
             neg_preds_deep += [torch.sigmoid(out_deep).squeeze().cpu()]
         neg_pred_shallow = torch.cat(neg_preds_shallow, dim=0).view(-1, 1000)
         neg_pred_deep = torch.cat(neg_preds_deep, dim=0).view(-1, 1000)
@@ -173,10 +173,10 @@ def warm_train(
         # Negative edges
         if config.dataset.dataset_name == "ogbl-citation2":
             dst_neg = torch.randint(
-                0, data_deep.x.shape[0], pos_edge_index[0].size(), dtype=torch.long, device=config.device
+                0, data_deep.x.shape[0], edge[0].size(), dtype=torch.long, device=config.device
             )
-            neg_out_shallow = shallow(pos_edge_index[0], dst_neg)
-            neg_out_deep = predictor(W[pos_edge_index[0]], W[dst_neg])
+            neg_out_shallow = shallow(edge[0], dst_neg)
+            neg_out_deep = predictor(W[edge[0]], W[dst_neg])
         else:
             neg_edge_index = get_negative_samples(edge, data_deep.x.shape[0], edge.size(1))
             neg_edge_index = neg_edge_index.to(data_deep.x.device)
@@ -242,6 +242,7 @@ def fit_warm_start(
             optimizer_deep=optimizer_deep,
             criterion=criterion,
             config=config,
+            batch_size=training_args.batch_size,
         )
 
         prog_bar.set_postfix({"Shallow L": loss_shallow.item(), "Deep L": loss_deep.item()})
@@ -280,15 +281,21 @@ def fit_warm_start(
 
 def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_path):
     data = dataset[0]
+    undirected = True
     if data.is_directed():
+        undirected = False
         data.edge_index = to_undirected(data.edge_index)
 
     data = data.to(config.device)
-    data_shallow, split_edge = get_split_edge(data=data, dataset=dataset, config=config)
+    data_shallow, split_edge = get_split_edge(
+        data=data, dataset=dataset, config=config, training_args=training_args
+    )
 
     if "edge_weight" in data:
         data.edge_weight = data.edge_weight.view(-1).to(torch.float)
     data_deep = T.ToSparseTensor()(data)
+    if not undirected:
+        data_deep.adj_t = data_deep.adj_t.to_symmetric()
     data_deep = data_deep.to(config.device)
 
     for counter, seed in enumerate(seeds):
@@ -420,15 +427,32 @@ def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_
                 pos_out_deep = predictor(W[edge[0]], W[edge[1]])
 
                 # Negative edges
-                neg_edge_index = get_negative_samples(edge, data_deep.x.shape[0], edge.size(1))
-                neg_edge_index = neg_edge_index.to(config.device)
-                neg_out_shallow = shallow(neg_edge_index[0], neg_edge_index[1])
-                neg_out_deep = predictor(W[edge[0]], W[edge[1]])
+                if config.dataset.dataset_name == "ogbl-citation2":
+                    dst_neg = torch.randint(
+                        0, data_deep.x.shape[0], edge[0].size(), dtype=torch.long, device=config.device
+                    )
+                    neg_out_shallow = shallow(edge[0], dst_neg)
+                    neg_out_deep = predictor(W[edge[0]], W[dst_neg])
+                else:
+                    neg_edge_index = get_negative_samples(edge, data_deep.x.shape[0], edge.size(1))
+                    neg_edge_index = neg_edge_index.to(data_deep.x.device)
+                    neg_out_shallow = shallow(neg_edge_index[0], neg_edge_index[1])
+                    neg_out_deep = predictor(W[neg_edge_index[0]], W[neg_edge_index[1]])
 
                 # Now Predictions
-                pos_logits = pos_out_shallow + λ * (pos_out_deep.squeeze(1))
+                pos_logits = predict(
+                    shallow_logit=pos_out_shallow,
+                    lambda_=λ,
+                    deep_logit=pos_out_deep.squeeze(),
+                    training_args=training_args,
+                )
                 # total negative
-                neg_logits = neg_out_shallow + λ * (neg_out_deep.squeeze(1))
+                neg_logits = predict(
+                    shallow_logit=neg_out_shallow,
+                    lambda_=λ,
+                    deep_logit=neg_out_deep.squeeze(),
+                    training_args=training_args,
+                )
 
                 # concat positive and negative predictions
                 total_predictions = torch.cat([pos_logits, neg_logits], dim=0)

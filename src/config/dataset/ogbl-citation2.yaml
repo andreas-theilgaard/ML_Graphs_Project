@@ -56,3 +56,124 @@ Shallow:
     batch_size: 65536
     train_batch: False
     weight_decay: 0
+
+
+combined:
+  type: 'comb2'
+  comb1:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+      direct: True
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.1
+      deep_decode: 'dist'
+      gamma: 0.0
+
+      balance: False
+      warm_start: 1
+      joint_train: 1
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 1
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb2:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+
+      balance: False
+      warm_start: 1
+      joint_train: 1
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 1
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb3:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+
+      balance: False
+      warm_start: 1
+      joint_train: 1
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.001
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 1
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0
+
+  comb4:
+    training:
+      shallow_lr: 0.1
+      init_beta: 0.0
+      embedding_dim: 64
+      init: 'random'
+      decode_type: 'dist'
+
+
+      deep_model: 'GraphSage'
+      deep_hidden_channels: 256
+      deep_lr: 0.01
+      deep_out_dim: 256
+      deep_num_layers: 3
+      deep_dropout: 0.0
+      direct: True
+      gamma: 0.0
+      deep_decode: 'dist'
+
+
+      balance: False
+      warm_start: 1
+      joint_train: 1
+      shallow_lr_joint: 0.1
+      deep_lr_joint: 0.01
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 1
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 0

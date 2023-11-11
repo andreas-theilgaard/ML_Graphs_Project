@@ -105,26 +105,32 @@ class NodeClassifier(nn.Module):
         return x
 
 
-def test_MLP(model, x, y, split_idx, evaluator):
+def test_MLP(model, x, y, split_idx, evaluator, config):
     model.eval()
     with torch.no_grad():
         out = model(x)
         y_pred = out.argmax(dim=-1, keepdim=True)
 
-        y_true_train = y[split_idx["train"]]
-        y_true_valid = y[split_idx["valid"]]
-        y_true_test = y[split_idx["test"]]
-
-        predictions = {
-            "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]]},
-            "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]]},
-            "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]]},
-        }
+        if config.dataset.dataset_name != "ogbn-mag":
+            predictions = {
+                "train": {"y_true": y[split_idx["train"]], "y_hat": y_pred[split_idx["train"]]},
+                "val": {"y_true": y[split_idx["valid"]], "y_hat": y_pred[split_idx["valid"]]},
+                "test": {"y_true": y[split_idx["test"]], "y_hat": y_pred[split_idx["test"]]},
+            }
+        else:
+            y_true_train = y[split_idx["train"]["paper"]]
+            y_true_valid = y[split_idx["valid"]["paper"]]
+            y_true_test = y[split_idx["test"]["paper"]]
+            predictions = {
+                "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]["paper"]]},
+                "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]["paper"]]},
+                "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]["paper"]]},
+            }
         results = evaluator.collect_metrics(predictions)
         return results
 
 
-def test_joint(MLP, deep, shallow, data_deep, split_idx, evaluator):
+def test_joint(MLP, deep, shallow, data_deep, split_idx, evaluator, config):
     MLP.eval()
     deep.eval()
     shallow.eval()
@@ -135,18 +141,26 @@ def test_joint(MLP, deep, shallow, data_deep, split_idx, evaluator):
         out = MLP(combined_out)
         y_pred = out.argmax(dim=-1, keepdim=True)
 
-        y_true_train = data_deep.y[split_idx["train"]]
-        y_true_valid = data_deep.y[split_idx["valid"]]
-        y_true_test = data_deep.y[split_idx["test"]]
-        # print(f"""Train: {round((y_pred[split_idx["train"]] == y_true_train).float().mean().item()*100,2)}%""")
-        # print(f"""Val: {round((y_pred[split_idx["valid"]] == y_true_valid).float().mean().item()*100,2)}%""")
-        # print(f"""Test: {round((y_pred[split_idx["test"]] == y_true_test).float().mean().item()*100,2)}%""")
+        if config.dataset.dataset_name == "ogbn-mag":
+            y_true_train = data_deep.y[split_idx["train"]["paper"]]
+            y_true_valid = data_deep.y[split_idx["valid"]["paper"]]
+            y_true_test = data_deep.y[split_idx["test"]["paper"]]
+            predictions = {
+                "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]["paper"]]},
+                "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]["paper"]]},
+                "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]["paper"]]},
+            }
 
-        predictions = {
-            "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]]},
-            "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]]},
-            "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]]},
-        }
+        else:
+            y_true_train = data_deep.y[split_idx["train"]]
+            y_true_valid = data_deep.y[split_idx["valid"]]
+            y_true_test = data_deep.y[split_idx["test"]]
+
+            predictions = {
+                "train": {"y_true": y_true_train, "y_hat": y_pred[split_idx["train"]]},
+                "val": {"y_true": y_true_valid, "y_hat": y_pred[split_idx["valid"]]},
+                "test": {"y_true": y_true_test, "y_hat": y_pred[split_idx["test"]]},
+            }
         results = evaluator.collect_metrics(predictions)
         return results
 

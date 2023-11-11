@@ -11,6 +11,7 @@ from src.models.utils import create_path
 from src.models.utils import prepare_metric_cols
 import torch_geometric.transforms as T
 from src.data.data_utils import get_link_data_split
+from torch_geometric.data import Data
 
 # from ogb.linkproppred import Evaluator
 from src.models.metrics import METRICS
@@ -123,18 +124,11 @@ def test_link(config, model, split_edge, evaluator, batch_size, device):
         neg_test_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
     neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
-    if config.dataset.dataset_name in ["ogbl-vessel"]:
-        predictions = {
-            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_train_pred},
-            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
-            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
-        }
-    else:
-        predictions = {
-            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
-            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
-            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
-        }
+    predictions = {
+        "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+        "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+        "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+    }
     results = evaluator.collect_metrics(predictions)
     return results
 
@@ -256,8 +250,8 @@ class ShallowTrainer:
 
         if self.config.dataset.dataset_name == "ogbl-citation2":
             model.train()
-            source_edge = split_edge["train"]["source_node"].to(data.x.device)
-            target_edge = split_edge["train"]["target_node"].to(data.x.device)
+            source_edge = split_edge["train"]["source_node"].to(data.device)
+            target_edge = split_edge["train"]["target_node"].to(data.device)
 
             loss_list = []
             acc_list = []
@@ -271,7 +265,7 @@ class ShallowTrainer:
                 # Just do some trivial random sampling.
                 # dst_neg = self.get_negative_samples(src, num_nodes, src.size())
 
-                dst_neg = torch.randint(0, data.num_nodes, src.size(), dtype=torch.long, device=data.x.device)
+                dst_neg = torch.randint(0, data.num_nodes, src.size(), dtype=torch.long, device=data.device)
                 neg_out = model(src, dst_neg)
 
                 out = torch.cat([pos_out, neg_out], dim=0)
@@ -341,6 +335,7 @@ class ShallowTrainer:
 
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
+        data = data.to(self.config.device)
 
         # If task is link prediction only use training edges
         if self.config.dataset.task == "LinkPrediction":
@@ -367,7 +362,9 @@ class ShallowTrainer:
             data = (
                 (split_edge["train"]["edge"]).T
                 if self.config.dataset.dataset_name != "ogbl-citation2"
-                else torch.vstack([split_edge["train"]["source_node"], split_edge["train"]["target_node"]])
+                else torch.vstack(
+                    [split_edge["train"]["source_node"], split_edge["train"]["target_node"]]
+                ).to(self.config.device)
             )
             # assert torch.unique(data.flatten()).size(0) == NUMBER_NODES
             if self.config.dataset.dataset_name == "ogbl-citation2":
@@ -378,6 +375,12 @@ class ShallowTrainer:
                     "target_node": split_edge["train"]["target_node"][idx],
                     "target_node_neg": split_edge["valid"]["target_node_neg"],
                 }
+        elif self.config.dataset.dataset_name == "ogbn-mag":
+            data = Data(
+                x=data.x_dict["paper"],
+                edge_index=data.edge_index_dict[("paper", "cites", "paper")],
+                y=data.y_dict["paper"],
+            )
 
         for seed in seeds:
             set_seed(seed)
