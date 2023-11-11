@@ -91,7 +91,7 @@ class METRICS:
                 y_hat = torch.cat(
                     [predictions[data_type]["y_pred_pos"], predictions[data_type]["y_pred_neg"]], dim=0
                 )
-                y_hat = (y_hat >= 0.5).float().numpy()
+                y_hat = (y_hat >= 0.5).float().detach().cpu().numpy()
                 y_true = torch.cat(
                     [
                         torch.ones(predictions[data_type]["y_pred_pos"].shape[0]),

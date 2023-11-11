@@ -38,7 +38,7 @@ class ModelWeights:
         if deep_freeze != self.deep_is_frozen:
             if deep_freeze:
                 freeze_model_params(deep)
-                if isinstance(predictor, bool):
+                if not isinstance(predictor, bool):
                     freeze_model_params(predictor)
             else:
                 unfreeze_model_params(deep)

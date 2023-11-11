@@ -293,7 +293,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
         shallow_emb = shallow.embeddings.weight.data.detach().cpu()
         deep_emb = deep_emb.to(config.device)
         shallow_emb = shallow_emb.to(config.device)
-        concat_embeddings = torch.cat([shallow_emb, deep_emb], dim=-1)
+        concat_embeddings = torch.cat([shallow_emb, deep_emb], dim=-1).to(config.device)
 
         Classifier = NodeClassifier(
             in_channels=deep_emb.shape[1] + shallow_emb.shape[1],
@@ -301,7 +301,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
             out_channels=dataset.num_classes,
             num_layers=training_args.MLP_NUM_LAYERS,
             dropout=training_args.MLP_DROPOUT,
-        )
+        ).to(config.device)
 
         MLP_optimizer = torch.optim.Adam(Classifier.parameters(), lr=training_args.MLP_LR)
 

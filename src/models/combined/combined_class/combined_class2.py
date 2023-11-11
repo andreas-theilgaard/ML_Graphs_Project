@@ -98,7 +98,7 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
         shallow = create_and_fit_shallow(
             data=data, dataset=dataset, split_idx=split_idx, training_args=training_args, config=config
         )
-        shallow_embeddings = shallow.embeddings
+        shallow_embeddings = (shallow.embeddings).to(config.device)
         # create gnn
 
         if training_args.deep_model == "GraphSage":
@@ -126,7 +126,7 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
             dropout=training_args.MLP_DROPOUT,
             apply_batchnorm=training_args.APPLY_BATCHNORM,
             num_layers=training_args.MLP_NUM_LAYERS,
-        )
+        ).to(config.device)
 
         params_combined = [
             {"params": deep.parameters(), "lr": training_args.deep_lr},
@@ -154,14 +154,16 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
             MLP.train()
             shallow.train()
 
-            control_model_weights.step(epoch=epoch, shallow=shallow, deep=deep)
+            control_model_weights.step(epoch=epoch, shallow=shallow_embeddings, deep=deep)
             optimizer.zero_grad()
 
             deep_out = deep(data_deep.x, data_deep.adj_t)[train_idx]
-            shallow_out = shallow_embeddings.weight[train_idx]
-            combined_out = torch.cat([shallow_out, deep_out], dim=-1)
+            shallow_out = shallow_embeddings(train_idx)
+            combined_out = torch.cat([shallow_out, deep_out], dim=-1).to(config.device)
             out = MLP(combined_out)
-            loss = criterion(out, (data_deep.y[train_idx]).type(torch.LongTensor).squeeze(1))
+            loss = criterion(
+                out, (data_deep.y[train_idx]).type(torch.LongTensor).squeeze(1).to(config.device)
+            )
             loss.backward()
 
             prog_bar.set_postfix({"loss": loss.item()})
