@@ -383,7 +383,7 @@ def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_
             predictor.train()
 
         # Now consider joint traning
-        λ = nn.Parameter(torch.tensor(training_args.lambda_)).to(config.device)
+        λ = nn.Parameter(torch.tensor(training_args.lambda_))
         params_combined = [
             {"params": shallow.parameters(), "lr": training_args.shallow_lr_joint},
             {

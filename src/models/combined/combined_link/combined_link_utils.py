@@ -258,7 +258,7 @@ def test_joint(
                 torch.sigmoid(
                     predict(
                         shallow_logit=shallow_out,
-                        lambda_=λ.cpu(),
+                        lambda_=λ,
                         deep_logit=deep_o,
                         training_args=training_args,
                     )
@@ -279,7 +279,7 @@ def test_joint(
                 torch.sigmoid(
                     predict(
                         shallow_logit=shallow_out,
-                        lambda_=λ.cpu(),
+                        lambda_=λ,
                         deep_logit=deep_o,
                         training_args=training_args,
                     )
@@ -300,7 +300,7 @@ def test_joint(
                 torch.sigmoid(
                     predict(
                         shallow_logit=shallow_out,
-                        lambda_=λ.cpu(),
+                        lambda_=λ,
                         deep_logit=deep_o,
                         training_args=training_args,
                     )
@@ -321,7 +321,7 @@ def test_joint(
                 torch.sigmoid(
                     predict(
                         shallow_logit=shallow_out,
-                        lambda_=λ.cpu(),
+                        lambda_=λ,
                         deep_logit=deep_o,
                         training_args=training_args,
                     )
@@ -342,7 +342,7 @@ def test_joint(
                 torch.sigmoid(
                     predict(
                         shallow_logit=shallow_out,
-                        lambda_=λ.cpu(),
+                        lambda_=λ,
                         deep_logit=deep_o,
                         training_args=training_args,
                     )
@@ -391,7 +391,7 @@ def test_joint_with_predictor(
             pos_train_preds += [
                 torch.sigmoid(
                     predict(
-                        shallow_logit=shallow_out,
+                        shallow_logit=shallow_out.cpu(),
                         lambda_=λ.cpu(),
                         deep_logit=deep_o,
                         training_args=training_args,
@@ -408,7 +408,7 @@ def test_joint_with_predictor(
             pos_valid_preds += [
                 torch.sigmoid(
                     predict(
-                        shallow_logit=shallow_out,
+                        shallow_logit=shallow_out.cpu(),
                         lambda_=λ.cpu(),
                         deep_logit=deep_o,
                         training_args=training_args,
@@ -425,7 +425,7 @@ def test_joint_with_predictor(
             neg_valid_preds += [
                 torch.sigmoid(
                     predict(
-                        shallow_logit=shallow_out,
+                        shallow_logit=shallow_out.cpu(),
                         lambda_=λ.cpu(),
                         deep_logit=deep_o,
                         training_args=training_args,
@@ -442,7 +442,7 @@ def test_joint_with_predictor(
             pos_test_preds += [
                 torch.sigmoid(
                     predict(
-                        shallow_logit=shallow_out,
+                        shallow_logit=shallow_out.cpu(),
                         lambda_=λ.cpu(),
                         deep_logit=deep_o,
                         training_args=training_args,
@@ -459,7 +459,7 @@ def test_joint_with_predictor(
             neg_test_preds += [
                 torch.sigmoid(
                     predict(
-                        shallow_logit=shallow_out,
+                        shallow_logit=shallow_out.cpu(),
                         lambda_=λ.cpu(),
                         deep_logit=deep_o,
                         training_args=training_args,

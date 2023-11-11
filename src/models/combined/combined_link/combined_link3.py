@@ -414,9 +414,7 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
             shallow_embeddings.train()
             deep.train()
             predictor.train()
-            control_model_weights.step(
-                epoch=epoch, shallow=shallow_embeddings, deep=deep, predictor=predictor
-            )
+            control_model_weights.step(epoch=epoch, shallow=shallow_embeddings, deep=deep)
 
             pos_edge_index = data_shallow
             pos_edge_index = pos_edge_index.to(config.device)
