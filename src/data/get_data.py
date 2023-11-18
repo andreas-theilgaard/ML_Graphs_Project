@@ -38,7 +38,7 @@ class DataLoader:
         if self.dataset in ["ogbn-arxiv"]:
             dataset = (
                 PygNodePropPredDataset(name=self.dataset, root="data")
-                if self.model_name != "GNN"
+                if self.model_name not in ["GNN"]
                 else PygNodePropPredDataset(name=self.dataset, root="data", transform=T.ToSparseTensor())
             )
         elif self.dataset == "ogbn-mag":

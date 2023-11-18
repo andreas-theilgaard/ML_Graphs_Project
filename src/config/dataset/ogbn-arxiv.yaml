@@ -39,10 +39,26 @@ GNN:
     num_layers: 3
     dropout: 0.5
     lr: 0.01
-    epochs: 5
+    epochs: 400
     use_valedges: False
     batchnorm: True
     weight_decay: 0
+
+GNN_DIRECT:
+  model: 'GraphSage'
+  extra_info: False
+  training:
+    hidden_channels: 256
+    num_layers: 3
+    dropout: 0.0
+    lr: 0.01
+    epochs: 50
+    weight_decay: 0
+    decode_type: 'dot'
+    init_beta: 0.0
+    train_batch: False
+    batch_size: 65536
+
 
 
 Shallow:
@@ -59,71 +75,72 @@ Shallow:
 
 
 combined:
-  type: 'comb2'
+  type: 'comb1'
   comb1:
     training:
       shallow_lr: 0.1
       init_beta: 0.0
       embedding_dim: 64
-      init: 'random'
+      init: 'laplacian'
       decode_type: 'dist'
 
       deep_model: 'GraphSage'
       deep_hidden_channels: 256
-      deep_lr: 0.005
-      deep_out_dim: 256
+      deep_lr: 0.01
+      deep_out_dim: 64
       deep_num_layers: 3
-      deep_dropout: 0.1
+      deep_dropout: 0.0
       deep_decode: 'dist'
       gamma: 0.0
 
-      MLP_HIDDEN: 256
+      MLP_HIDDEN: 128
       MLP_NUM_LAYERS: 3
       MLP_DROPOUT: 0.5
       MLP_LR: 0.01
-      MLP_EPOCHS: 1
+      MLP_EPOCHS: 500
+      APPLY_BATCHNORM: True
+
 
 
       balance: False
-      warm_start: 1
-      joint_train: 1
+      warm_start: 100
+      joint_train: 300
       shallow_lr_joint: 0.1
-      deep_lr_joint: 0.001
+      deep_lr_joint: 0.01
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 65536
       direction: 'shallow_first'
       shallow_frozen_epochs: 0
-      deep_frozen_epochs: 0
+      deep_frozen_epochs: 50
 
   comb2:
     training:
       shallow_lr: 0.1
       init_beta: 0.0
       embedding_dim: 64
-      init: 'random'
+      init: 'laplacian'
       decode_type: 'dist'
-      SHALLOW_WARM_START: 1
-      SHALLOW_TRAIN_BATCH: False
+      SHALLOW_WARM_START: 30
+      SHALLOW_TRAIN_BATCH: True
+      SHALLOW_WARM_BATCH_SIZE: 65536
 
 
       deep_model: 'GraphSage'
       deep_hidden_channels: 256
-      deep_lr: 0.001
+      deep_lr: 0.01
       deep_out_dim: 256
       deep_num_layers: 3
-      deep_dropout: 0.0
+      deep_dropout: 0.5
 
       MLP_HIDDEN: 256
-      MLP_NUM_LAYERS: 3
-      MLP_DROPOUT: 0.5
+      MLP_NUM_LAYERS: 2
+      MLP_DROPOUT: 0.0
       MLP_LR: 0.01
-      MLP_EPOCHS: 1
       APPLY_BATCHNORM: True
 
-
-      epochs: 1
+      epochs: 400
       batch_size: 65536
-      direction: 'shallow_first'
-      shallow_frozen_epochs: 0
-      deep_frozen_epochs: 0
+      direction: 'deep_first'
+      shallow_frozen_epochs: 100
+      deep_frozen_epochs: 100

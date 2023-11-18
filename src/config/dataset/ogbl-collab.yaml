@@ -58,7 +58,7 @@ Shallow:
     weight_decay: 0
 
 combined:
-  type: 'comb4'
+  type: 'comb3'
   comb1:
     training:
       shallow_lr: 0.1
@@ -78,8 +78,8 @@ combined:
       gamma: 0.0
 
       balance: False
-      warm_start: 1
-      joint_train: 1
+      warm_start: 100
+      joint_train: 400
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.001
       lambda_lr: 0.01
@@ -106,16 +106,16 @@ combined:
       deep_dropout: 0.0
 
       balance: False
-      warm_start: 1
-      joint_train: 1
+      warm_start: 100
+      joint_train: 400
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.001
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 65536
       direction: 'shallow_first'
-      shallow_frozen_epochs: 0
-      deep_frozen_epochs: 0
+      shallow_frozen_epochs: 2
+      deep_frozen_epochs: 2
 
   comb3:
     training:
@@ -133,9 +133,9 @@ combined:
       deep_num_layers: 3
       deep_dropout: 0.0
 
-      balance: False
-      warm_start: 1
-      joint_train: 1
+      warm_start: 100
+      shallow_weight_decay: 0.0001
+      joint_train: 400
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.001
       lambda_lr: 0.01
@@ -144,6 +144,11 @@ combined:
       direction: 'shallow_first'
       shallow_frozen_epochs: 0
       deep_frozen_epochs: 0
+
+      MLP_HIDDEN_CHANNELS: 256
+      MLP_LAYERS: 3
+      MLP_DROPOUT: 0.0
+
 
   comb4:
     training:
@@ -166,8 +171,8 @@ combined:
 
 
       balance: False
-      warm_start: 1
-      joint_train: 1
+      warm_start: 100
+      joint_train: 400
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.001
       lambda_lr: 0.01

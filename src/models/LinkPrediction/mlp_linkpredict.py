@@ -282,8 +282,8 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
     data = dataset[0]
     if config.dataset.dataset_name in ["ogbl-collab", "ogbl-vessel", "ogbl-citation2"]:
         split_edge = dataset.get_edge_split()
-    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer"]:
-        train_data, val_data, test_data = get_link_data_split(data)
+    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "PubMed", "Twitch"]:
+        train_data, val_data, test_data = get_link_data_split(data, dataset_name=config.dataset.dataset_name)
         edge_weight_in = data.edge_weight if "edge_weight" in data else None
         edge_weight_in = edge_weight_in.float() if edge_weight_in else edge_weight_in
         split_edge = {

@@ -11,6 +11,7 @@ from torch_geometric.data import Data
 # Node Classification
 from src.models.NodeClassification.mlp_nodeclass import mlp_node_classification
 from src.models.NodeClassification.GNN import GNN_trainer
+from src.models.NodeClassification.GNN_unsupervised import GNN_unsupervised_trainer
 
 # Link Prediction
 # from src.models.mlp_linkpredict import mlp_LinkPrediction
@@ -153,6 +154,20 @@ def main(config):
                 log=log,
                 Logger=Logger,
             )
+
+    ###########################################
+    # GNN unsupervised
+    ###########################################
+    elif config.model_type == "GNN_DIRECT" and config.dataset.task == "NodeClassification":
+        GNN_unsupervised_trainer(
+            dataset=dataset,
+            config=config,
+            training_args=training_args,
+            log=log,
+            save_path=save_path,
+            seeds=seeds,
+            Logger=Logger,
+        )
 
     ###########################################
     # Shallow

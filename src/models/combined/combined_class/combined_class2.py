@@ -99,7 +99,9 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
             data=data, dataset=dataset, split_idx=split_idx, training_args=training_args, config=config
         )
         shallow_embeddings = (shallow.embeddings).to(config.device)
+        # torch.save(shallow_embeddings.weight.data.cpu(),'emb.pth')
         # create gnn
+        # shallow_embeddings = torch.load('emb.pth', map_location=config.device)
 
         if training_args.deep_model == "GraphSage":
             deep = SAGE(
@@ -108,6 +110,7 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
                 dropout=training_args.deep_dropout,
+                apply_batchnorm=training_args.APPLY_BATCHNORM,
             ).to(config.device)
         elif training_args.deep_model == "GCN":
             deep = GCN(
@@ -116,6 +119,7 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
                 dropout=training_args.deep_dropout,
+                apply_batchnorm=training_args.APPLY_BATCHNORM,
             ).to(config.device)
 
         # create mlp
@@ -129,9 +133,9 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
         ).to(config.device)
 
         params_combined = [
-            {"params": deep.parameters(), "lr": training_args.deep_lr},
-            {"params": MLP.parameters(), "lr": training_args.MLP_LR},
-            {"params": shallow_embeddings.parameters(), "lr": training_args.shallow_lr},
+            {"params": list(deep.parameters()), "lr": training_args.deep_lr},
+            {"params": list(MLP.parameters()), "lr": training_args.MLP_LR},
+            # {"params": shallow_embeddings.parameters(), "lr": training_args.shallow_lr},
         ]
 
         optimizer = torch.optim.Adam(params_combined)
@@ -141,20 +145,24 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
             if config.dataset.dataset_name != "ogbn-mag"
             else split_idx["train"]["paper"].to(config.device)
         )
+        if train_idx.dtype == torch.bool:
+            train_idx = torch.where(train_idx.float() == 1)[0]
         criterion = torch.nn.CrossEntropyLoss()
         evaluator = METRICS(metrics_list=config.dataset.metrics, task="NodeClassification", dataset=dataset)
-        control_model_weights = ModelWeights(
-            direction=training_args.direction,
-            shallow_frozen_epochs=training_args.shallow_frozen_epochs,
-            deep_frozen_epochs=training_args.deep_frozen_epochs,
-        )
+        # control_model_weights = ModelWeights(
+        #     direction=training_args.direction,
+        #     shallow_frozen_epochs=training_args.shallow_frozen_epochs,
+        #     deep_frozen_epochs=training_args.deep_frozen_epochs,
+        # )
+        if len(data_deep.y.shape) == 1:
+            data_deep.y = data_deep.y.unsqueeze(1)
 
         for epoch in prog_bar:
             deep.train()
             MLP.train()
-            shallow_embeddings.train()
+            # shallow_embeddings.train()
 
-            control_model_weights.step(epoch=epoch, shallow=shallow_embeddings, deep=deep)
+            # control_model_weights.step(epoch=epoch, shallow=shallow_embeddings, deep=deep)
             optimizer.zero_grad()
 
             deep_out = deep(data_deep.x, data_deep.adj_t)[train_idx]
@@ -166,11 +174,9 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
             )
             loss.backward()
 
-            prog_bar.set_postfix({"loss": loss.item()})
-
-            torch.nn.utils.clip_grad_norm_(deep.parameters(), 1.0)
-            torch.nn.utils.clip_grad_norm_(MLP.parameters(), 1.0)
-            torch.nn.utils.clip_grad_norm_(shallow_embeddings.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_norm_(deep.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_norm_(MLP.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_norm_(shallow_embeddings.parameters(), 1.0)
             optimizer.step()
 
             # evaluate
@@ -183,8 +189,17 @@ def fit_combined2_class(config, dataset, training_args, Logger, log, seeds, save
                 evaluator=evaluator,
                 config=config,
             )
+            prog_bar.set_postfix(
+                {
+                    "loss": loss.item(),
+                    f"Train {config.dataset.track_metric}": results["train"][config.dataset.track_metric],
+                    f"Val {config.dataset.track_metric}": results["val"][config.dataset.track_metric],
+                    f"Test {config.dataset.track_metric}": results["test"][config.dataset.track_metric],
+                }
+            )
+
             Logger.add_to_run(loss=loss.item(), results=results)
 
-    Logger.end_run()
+        Logger.end_run()
     Logger.save_results(save_path + "/combined_comb2_class_results.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

@@ -1,0 +1,57 @@
+dataset_name: 'CiteSeer'
+task: 'NodeClassification'
+metrics: ['acc','f1','precision','recall']
+track_metric: 'f1'
+
+DownStream:
+  saved_embeddings: 'outputs/NodeClassification/Citeseer/Shallow/2023-11-05/17-44-30/embedding_seed=42.pth'
+  using_features: False
+  use_spectral: False
+  random: False
+  K: 16
+  training:
+    epochs: 200
+    num_layers: 2
+    dropout: 0.5
+    lr: 0.01
+    hidden_channels: 128
+    batchnorm: True
+    weight_decay: 0.0005
+
+
+Node2Vec:
+  training:
+    embedding_dim: 64
+    walk_length: 20
+    context_size: 10
+    walks_per_node: 10
+    epochs: 50
+    lr: 0.01
+    batch_size: 256
+    num_negative_samples: 1
+    sparse: True
+    num_workers: 4
+
+GNN:
+  model: 'GCN'
+  extra_info: False
+  training:
+    hidden_channels: 128
+    num_layers: 2
+    dropout: 0.5
+    lr: 0.01
+    epochs: 200
+    batchnorm: False
+    weight_decay: 0.0005
+
+Shallow:
+  training:
+    lr: 0.1
+    epochs: 500
+    init_beta: 0.0
+    embedding_dim: 64
+    init: 'random'
+    decode_type: 'dist'
+    train_batch: False
+    batch_size: 1024
+    weight_decay: 0.0

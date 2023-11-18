@@ -1,0 +1,120 @@
+dataset_name: 'PubMed'
+task: 'LinkPrediction'
+metrics: ['hits@10','hits@50','hits@100','acc','auc']
+track_metric: 'acc'
+
+DownStream:
+  saved_embeddings: False
+  using_features: True
+  use_spectral: False
+  random: False
+  K: 16
+  training:
+    epochs: 200
+    num_layers: 2
+    dropout: 0.0
+    lr: 0.01
+    hidden_channels: 8
+    batch_size: 512
+
+Node2Vec:
+  training:
+    embedding_dim: 8
+    walk_length: 80
+    context_size: 20
+    walks_per_node: 10
+    epochs: 10
+    lr: 0.01
+    batch_size: 256
+    num_negative_samples: 1
+    sparse: True
+    num_workers: 4
+
+GNN:
+  model: 'GCN'
+  extra_info: False
+  training:
+    hidden_channels: 8
+    num_layers: 2
+    dropout: 0.0
+    lr: 0.01
+    epochs: 100
+    batch_size: 512
+    weight_decay: 0.0
+
+
+Shallow:
+  training:
+    lr: 0.01
+    epochs: 400
+    init_beta: 0.0
+    embedding_dim: 8
+    init: 'laplacian'
+    decode_type: 'dist'
+    batch_size: 1024
+    train_batch: True
+    weight_decay: 0.000001
+
+
+combined:
+  type: 'comb3'
+  comb2:
+    training:
+      shallow_lr: 0.01
+      init_beta: 0.0
+      embedding_dim: 8
+      init: 'laplacian'
+      decode_type: 'dist'
+      weight_decay_shallow: 0.000001
+
+
+      deep_model: 'GCN'
+      deep_hidden_channels: 8
+      deep_lr: 0.01
+      deep_out_dim: 8
+      deep_num_layers: 2
+      deep_dropout: 0.0
+      weight_decay_deep: 0.0
+
+      balance: False
+      warm_start: 100
+      joint_train: 100
+      shallow_lr_joint: 0.01
+      deep_lr_joint: 0.01
+      lambda_lr: 0.01
+      lambda_: 1.0
+      batch_size: 1024
+      direction: 'deep_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 100
+
+  comb3:
+    training:
+      shallow_lr: 0.01
+      init_beta: 0.0
+      embedding_dim: 8
+      init: 'laplacian'
+      decode_type: 'dist'
+      weight_decay_shallow: 0.000001
+
+
+      deep_model: 'GCN'
+      deep_hidden_channels: 8
+      deep_lr: 0.01
+      deep_out_dim: 8
+      deep_num_layers: 2
+      deep_dropout: 0.0
+
+      warm_start: 100
+      joint_train: 100
+      shallow_lr_joint: 0.01
+      deep_lr_joint: 0.01
+      batch_size: 1024
+      direction: 'deep_first'
+      shallow_frozen_epochs: 0
+      deep_frozen_epochs: 100
+
+
+      MLP_HIDDEN_CHANNELS: 8
+      MLP_LAYERS: 2
+      MLP_DROPOUT: 0.0

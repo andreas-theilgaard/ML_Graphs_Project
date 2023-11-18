@@ -159,6 +159,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
                 dropout=training_args.deep_dropout,
+                apply_batchnorm=training_args.APPLY_BATCHNORM,
             ).to(config.device)
         elif training_args.deep_model == "GCN":
             deep = GCN(
@@ -167,6 +168,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
                 dropout=training_args.deep_dropout,
+                apply_batchnorm=training_args.APPLY_BATCHNORM,
             ).to(config.device)
 
         # setup optimizer
@@ -201,7 +203,7 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
             deep.train()
 
         # Now consider joint traning
-        λ = nn.Parameter(torch.tensor(training_args.gamma))
+        λ = nn.Parameter(torch.tensor(training_args.lambda_))
 
         DEEP_PARAMS = {"params": list(deep.parameters()) + [gamma], "lr": training_args.deep_lr_joint}
 
@@ -228,7 +230,9 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
 
             pos_edge_index = data.edge_index
             pos_edge_index = pos_edge_index.to(config.device)
-            neg_edge_index = get_negative_samples(pos_edge_index, dataset.num_nodes, pos_edge_index.size(1))
+            neg_edge_index = get_negative_samples(
+                pos_edge_index, data_deep.x.shape[0], pos_edge_index.size(1)
+            )
             neg_edge_index = neg_edge_index.to(config.device)
 
             #######################
@@ -307,14 +311,19 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
 
         criterion = torch.nn.CrossEntropyLoss()
         train_idx = split_idx["train"].to(config.device)
+        y = data.y.to(config.device)
+        if len(y.shape) == 1:
+            y = y.unsqueeze(1)
 
         for epoch in tqdm(range(training_args.MLP_EPOCHS)):
             Classifier.train()
             MLP_optimizer.zero_grad()
             out = Classifier(concat_embeddings)
-            loss = criterion(out[train_idx], (y[train_idx]).type(torch.LongTensor))
+            loss = criterion(
+                out[train_idx], (y[train_idx]).type(torch.LongTensor).to(config.device).squeeze(1)
+            )
             loss.backward()
-            optimizer.step()
+            MLP_optimizer.step()
             results = test_MLP(
                 model=Classifier,
                 x=concat_embeddings,
@@ -324,7 +333,8 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
                 config=config,
             )
             Logger.add_to_run(loss=loss.item(), results=results)
+            # print(results['train']['acc'],results['test']['acc'])
 
-    Logger.end_run()
+        Logger.end_run()
     Logger.save_results(save_path + "/combined_comb1_class_results.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

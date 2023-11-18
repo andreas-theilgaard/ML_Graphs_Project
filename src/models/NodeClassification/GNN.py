@@ -9,6 +9,8 @@ from src.models.metrics import METRICS
 from src.models.utils import create_path
 from torch_geometric.data import Data
 import torch_geometric.transforms as T
+from src.models.utils import get_k_laplacian_eigenvectors
+from torch_geometric.utils import to_undirected
 
 
 class GNN:
@@ -122,6 +124,20 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
         embedding = torch.load(config.dataset[config.model_type].extra_info, map_location=config.device)
         X = torch.cat([data.x, embedding], dim=-1)
         data.x = X
+
+    if config.dataset[config.model_type].use_spectral:
+        if data.is_directed():
+            data.edge_index = to_undirected(data.edge_index)
+        X = get_k_laplacian_eigenvectors(
+            data=data,
+            dataset=dataset,
+            k=config.dataset[config.model_type].K,
+            is_undirected=True,
+            for_link=False,
+            edge_split=split_idx,
+            num_nodes=data.x.shape[0],
+        )
+        data.x = torch.cat([data.x, X], dim=-1)
 
     data = data.to(config.device)
     if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-mag"]:

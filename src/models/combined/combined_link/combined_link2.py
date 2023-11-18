@@ -347,9 +347,19 @@ def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_
         ).to(config.device)
 
         # setup optimizer
-        params_shallow = [{"params": shallow.parameters(), "lr": training_args.shallow_lr}]
+        params_shallow = [
+            {
+                "params": shallow.parameters(),
+                "lr": training_args.shallow_lr,
+                "weight_decay": training_args.weight_decay_shallow,
+            }
+        ]
         params_deep = [
-            {"params": list(deep.parameters()) + list(predictor.parameters()), "lr": training_args.deep_lr}
+            {
+                "params": list(deep.parameters()) + list(predictor.parameters()),
+                "lr": training_args.deep_lr,
+                "weight_decay": training_args.weight_decay_deep,
+            }
         ]
 
         optimizer_shallow = torch.optim.Adam(params_shallow)
@@ -385,10 +395,15 @@ def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_
         # Now consider joint traning
         λ = nn.Parameter(torch.tensor(training_args.lambda_))
         params_combined = [
-            {"params": shallow.parameters(), "lr": training_args.shallow_lr_joint},
+            {
+                "params": shallow.parameters(),
+                "lr": training_args.shallow_lr_joint,
+                "weight_decay": training_args.weight_decay_shallow,
+            },
             {
                 "params": list(deep.parameters()) + list(predictor.parameters()),
                 "lr": training_args.deep_lr_joint,
+                "weight_decay": training_args.weight_decay_deep,
             },
             {"params": [λ], "lr": training_args.lambda_lr},
         ]
@@ -493,6 +508,6 @@ def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_
             )
             Logger.add_to_run(loss=np.mean(loss_list), results=results)
 
-    Logger.end_run()
+        Logger.end_run()
     Logger.save_results(save_path + "/combined_comb2_results.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

@@ -133,7 +133,7 @@ def test_MLP(model, x, y, split_idx, evaluator, config):
 def test_joint(MLP, deep, shallow, data_deep, split_idx, evaluator, config):
     MLP.eval()
     deep.eval()
-    shallow.eval()
+    # shallow.eval()
     with torch.no_grad():
         deep_out = deep(data_deep.x, data_deep.adj_t)
         shallow_out = shallow.weight

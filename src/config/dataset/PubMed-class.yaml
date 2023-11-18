@@ -1,4 +1,4 @@
-dataset_name: 'Cora'
+dataset_name: 'PubMed'
 task: 'NodeClassification'
 metrics: ['acc','f1-micro','f1-macro']
 track_metric: 'acc'
@@ -14,9 +14,9 @@ DownStream:
     num_layers: 2
     dropout: 0.5
     lr: 0.01
-    hidden_channels: 16
+    hidden_channels: 8
     batchnorm: False
-    weight_decay: 0.0005
+    weight_decay: 0.0
 
 
 Node2Vec:
@@ -36,41 +36,25 @@ GNN:
   model: 'GCN'
   extra_info: False
   training:
-    hidden_channels: 16
+    hidden_channels: 8
     num_layers: 2
     dropout: 0.5
     lr: 0.01
     epochs: 200
     batchnorm: False
-    weight_decay: 0.0005
-
-GNN_DIRECT:
-  model: 'GraphSage'
-  extra_info: False
-  training:
-    hidden_channels: 16
-    num_layers: 2
-    dropout: 0.0
-    lr: 0.01
-    epochs: 200
-    weight_decay: 0
-    decode_type: 'dot'
-    init_beta: 0.0
-    train_batch: True
-    batch_size: 256
-
+    weight_decay: 0.0
 
 Shallow:
   training:
     lr: 0.01
-    epochs: 500
+    epochs: 300
     init_beta: 0.0
-    embedding_dim: 16
-    init: 'random'
+    embedding_dim: 8
+    init: 'laplacian'
     decode_type: 'dist'
     train_batch: True
-    batch_size: 256
-    weight_decay: 0.00005
+    batch_size: 1024
+    weight_decay: 0.000001
 
 
 combined:
@@ -80,19 +64,19 @@ combined:
       shallow_lr: 0.01
       init_beta: 0.0
       embedding_dim: 16
-      init: 'random'
+      init: 'laplacian'
       decode_type: 'dist'
 
       deep_model: 'GCN'
-      deep_hidden_channels: 16
+      deep_hidden_channels: 8
       deep_lr: 0.01
-      deep_out_dim: 16
+      deep_out_dim: 8
       deep_num_layers: 2
       deep_dropout: 0.0
       deep_decode: 'dist'
       gamma: 0.0
 
-      MLP_HIDDEN: 16
+      MLP_HIDDEN: 8
       MLP_NUM_LAYERS: 2
       MLP_DROPOUT: 0.5
       MLP_LR: 0.01
@@ -116,8 +100,8 @@ combined:
     training:
       shallow_lr: 0.01
       init_beta: 0.0
-      embedding_dim: 16
-      init: 'random'
+      embedding_dim: 8
+      init: 'laplacian'
       decode_type: 'dist'
       SHALLOW_WARM_START: 200
       SHALLOW_TRAIN_BATCH: True
@@ -125,13 +109,13 @@ combined:
 
 
       deep_model: 'GCN'
-      deep_hidden_channels: 16
+      deep_hidden_channels: 8
       deep_lr: 0.01
-      deep_out_dim: 16
+      deep_out_dim: 8
       deep_num_layers: 2
       deep_dropout: 0.5
 
-      MLP_HIDDEN: 16
+      MLP_HIDDEN: 8
       MLP_NUM_LAYERS: 2
       MLP_DROPOUT: 0.5
       MLP_LR: 0.01

@@ -12,6 +12,8 @@ from src.models.utils import create_path
 from src.data.data_utils import get_link_data_split
 from src.models.utils import get_negative_samples
 from torch_geometric.utils import to_undirected
+from src.models.utils import get_k_laplacian_eigenvectors
+from torch_geometric.utils import to_undirected
 
 
 class SAGE(torch.nn.Module):
@@ -124,43 +126,7 @@ def train_citation(config, model, predictor, data, split_edge, optimizer, batch_
     return total_loss / total_examples
 
 
-def train(config, model, predictor, data, split_edge, optimizer, batch_size):
-    model.train()
-    predictor.train()
-
-    pos_train_edge = split_edge["train"]["edge"].to(data.x.device)
-
-    total_loss = total_examples = 0
-    for perm in DataLoader(range(pos_train_edge.size(0)), batch_size, shuffle=True):
-        optimizer.zero_grad()
-
-        h = model(data.x, data.adj_t)
-
-        edge = pos_train_edge[perm].t()
-
-        pos_out = predictor(h[edge[0]], h[edge[1]])
-        pos_loss = -torch.log(pos_out + 1e-15).mean()
-
-        edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
-        neg_out = predictor(h[edge[0]], h[edge[1]])
-        neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
-        loss = pos_loss + neg_loss
-        loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        torch.nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
-
-        optimizer.step()
-
-        num_examples = pos_out.size(0)
-        total_loss += loss.item() * num_examples
-        total_examples += num_examples
-
-    return total_loss / total_examples
-
-
-# def train(config,model, predictor, data, split_edge, optimizer, batch_size):
-#     criterion = torch.nn.BCELoss()
+# def train(config, model, predictor, data, split_edge, optimizer, batch_size):
 #     model.train()
 #     predictor.train()
 
@@ -175,17 +141,12 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
 #         edge = pos_train_edge[perm].t()
 
 #         pos_out = predictor(h[edge[0]], h[edge[1]])
-#         #pos_loss = -torch.log(pos_out + 1e-15).mean()
+#         pos_loss = -torch.log(pos_out + 1e-15).mean()
 
-#         # Just do some trivial random sampling.
-#         #edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
-#         edge = get_negative_samples(edge_index=edge,num_nodes=data.x.shape[0],num_neg_samples=edge.size(1))
+#         edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
 #         neg_out = predictor(h[edge[0]], h[edge[1]])
-#         predictions = torch.cat([pos_out, neg_out], dim=0)
-#         y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(data.x.device).unsqueeze(1)
-#         loss = criterion(predictions,y)
-#         #neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
-#         #loss = pos_loss + neg_loss
+#         neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
+#         loss = pos_loss + neg_loss
 #         loss.backward()
 
 #         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -198,6 +159,51 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
 #         total_examples += num_examples
 
 #     return total_loss / total_examples
+
+
+def train(config, model, predictor, data, split_edge, optimizer, batch_size):
+    criterion = torch.nn.BCELoss()
+    model.train()
+    predictor.train()
+
+    pos_train_edge = split_edge["train"]["edge"].to(data.x.device)
+
+    total_loss = total_examples = 0
+    for perm in DataLoader(range(pos_train_edge.size(0)), batch_size, shuffle=True):
+        optimizer.zero_grad()
+
+        h = model(data.x, data.adj_t)
+
+        edge = pos_train_edge[perm].t()
+
+        pos_out = predictor(h[edge[0]], h[edge[1]])
+        # pos_loss = -torch.log(pos_out + 1e-15).mean()
+
+        # Just do some trivial random sampling.
+        # edge = torch.randint(0, data.num_nodes, edge.size(), dtype=torch.long, device=h.device)
+        edge = get_negative_samples(edge_index=edge, num_nodes=data.x.shape[0], num_neg_samples=edge.size(1))
+        neg_out = predictor(h[edge[0]], h[edge[1]])
+        predictions = torch.cat([pos_out, neg_out], dim=0)
+        y = (
+            torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0)
+            .to(data.x.device)
+            .unsqueeze(1)
+        )
+        loss = criterion(predictions, y)
+        # neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
+        # loss = pos_loss + neg_loss
+        loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
+
+        optimizer.step()
+
+        num_examples = pos_out.size(0)
+        total_loss += loss.item() * num_examples
+        total_examples += num_examples
+
+    return total_loss / total_examples
 
 
 @torch.no_grad()
@@ -306,11 +312,12 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
         data = T.ToSparseTensor()(data)
         split_edge = dataset.get_edge_split()
 
-    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "Twitch"]:
+    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "Twitch", "PubMed"]:
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
+        data = T.ToSparseTensor()(data)
 
-        train_data, val_data, test_data = get_link_data_split(data)
+        train_data, val_data, test_data = get_link_data_split(data, dataset_name=config.dataset.dataset_name)
         split_edge = {
             "train": {"edge": train_data.pos_edge_label_index.T},
             "valid": {
@@ -351,6 +358,20 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
         embedding = torch.load(config.dataset[config.model_type].extra_info, map_location=config.device)
         X = torch.cat([data.x, embedding], dim=-1)
         data.x = X
+
+    if config.dataset[config.model_type].use_spectral:
+        if data.is_directed():
+            data.edge_index = to_undirected(data.edge_index)
+        X = get_k_laplacian_eigenvectors(
+            data=(split_edge["train"]["edge"]).T,
+            dataset=dataset,
+            k=config.dataset[config.model_type].K,
+            is_undirected=True,
+            num_nodes=data.x.shape[0],
+            for_link=True,
+            edge_split=split_edge,
+        )
+        data.x = torch.cat([data.x, X], dim=-1)
 
     data = data.to(config.device)
 

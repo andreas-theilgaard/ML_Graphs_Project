@@ -10,6 +10,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 import torch
+import copy
 
 
 def directions(metric):
@@ -47,14 +48,14 @@ class METRICS:
     def ogb_acc(self, y, y_hat):
         return self.evaluator_class.eval({"y_true": y, "y_pred": y_hat})
 
-    def roc_auc(self, y_pred_pos, y_pred_neg):
-        return self.evaluator_link.eval({"y_pred_pos": y_pred_pos, "y_pred_neg": y_pred_neg})["rocauc"]
+    # def roc_auc(self, y_pred_pos, y_pred_neg):
+    #     return self.evaluator_link.eval({"y_pred_pos": y_pred_pos, "y_pred_neg": y_pred_neg})["rocauc"]
 
     def accuracy(self, y, y_hat):
         return accuracy_score(y_true=y, y_pred=y_hat)
 
-    # def roc_auc(self, y, y_hat): #TODO
-    #     return roc_auc_score(y_true=y, y_score=y_hat, average="micro")
+    def roc_auc(self, y, y_hat):
+        return roc_auc_score(y_true=y, y_score=y_hat)
 
     def f1(self, y, y_hat, avg):
         return f1_score(y_true=y, y_pred=y_hat, average=avg)
@@ -91,6 +92,7 @@ class METRICS:
                 y_hat = torch.cat(
                     [predictions[data_type]["y_pred_pos"], predictions[data_type]["y_pred_neg"]], dim=0
                 )
+                y_hat_raw = copy.deepcopy(y_hat)
                 y_hat = (y_hat >= 0.5).float().detach().cpu().numpy()
                 y_true = torch.cat(
                     [
@@ -107,8 +109,8 @@ class METRICS:
                     inner_results[metric] = self.f1(y=y_true, y_hat=y_hat, avg="micro")
                 elif metric == "acc":
                     inner_results[metric] = self.accuracy(y=y_true, y_hat=y_hat)
-                # elif metric == "roc_auc":
-                #    inner_results[metric] = self.roc_auc(y=y_true, y_hat=y_hat)
+                elif metric == "roc_auc":
+                    inner_results[metric] = self.roc_auc(y=y_true, y_hat=y_hat_raw)
                 elif metric == "precision-micro":
                     inner_results[metric] = self.precision(y=y_true, y_hat=y_hat, avg="micro")
                 elif metric == "recall-micro":

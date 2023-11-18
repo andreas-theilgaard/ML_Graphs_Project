@@ -1,0 +1,56 @@
+dataset_name: 'CiteSeer'
+task: 'LinkPrediction'
+metrics: ['hits@10','hits@50','hits@100','acc','auc']
+track_metric: 'acc'
+
+DownStream:
+  saved_embeddings: False
+  using_features: True
+  use_spectral: False
+  random: False
+  K: 16
+  training:
+    epochs: 200
+    num_layers: 2
+    dropout: 0.0
+    lr: 0.01
+    hidden_channels: 8
+    batch_size: 512
+
+Node2Vec:
+  training:
+    embedding_dim: 8
+    walk_length: 80
+    context_size: 20
+    walks_per_node: 10
+    epochs: 5
+    lr: 0.01
+    batch_size: 256
+    num_negative_samples: 1
+    sparse: True
+    num_workers: 4
+
+GNN:
+  model: 'GCN'
+  extra_info: False
+  training:
+    hidden_channels: 8
+    num_layers: 2
+    dropout: 0.0
+    lr: 0.01
+    epochs: 300
+    batch_size: 512
+    weight_decay: 0.0
+
+
+Shallow:
+  training:
+    lr: 0.01
+    epochs: 400
+    init_beta: 0.0
+    embedding_dim: 8
+    init: 'laplacian'
+    decode_type: 'dot'
+    batch_size: 512
+    train_batch: False
+    weight_decay: 0.0

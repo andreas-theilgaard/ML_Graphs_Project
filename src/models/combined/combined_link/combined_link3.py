@@ -332,7 +332,7 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
             ).to(config.device)
         elif training_args.deep_model == "GCN":
             deep = GCN(
-                n_channels=data.num_features,
+                in_channels=data.num_features,
                 hidden_channels=training_args.deep_hidden_channels,
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
@@ -341,14 +341,20 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
 
         predictor = LinkPredictor(
             in_channels=training_args.deep_out_dim,
-            hidden_channels=training_args.deep_hidden_channels,
+            hidden_channels=training_args.MLP_HIDDEN_CHANNELS,
             out_channels=1,
-            num_layers=training_args.deep_num_layers,
-            dropout=training_args.deep_dropout,
+            num_layers=training_args.MLP_LAYERS,
+            dropout=training_args.MLP_DROPOUT,
         ).to(config.device)
 
         # setup optimizer
-        params_shallow = [{"params": shallow.parameters(), "lr": training_args.shallow_lr}]
+        params_shallow = [
+            {
+                "params": shallow.parameters(),
+                "lr": training_args.shallow_lr,
+                "weight_decay": training_args.weight_decay_shallow,
+            }
+        ]
         params_deep = [
             {"params": list(deep.parameters()) + list(predictor.parameters()), "lr": training_args.deep_lr}
         ]
@@ -393,7 +399,11 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
         ).to(config.device)
 
         params_combined = [
-            {"params": shallow.parameters(), "lr": training_args.shallow_lr_joint},
+            {
+                "params": shallow.parameters(),
+                "lr": training_args.shallow_lr_joint,
+                "weight_decay": training_args.weight_decay_shallow,
+            },
             {
                 "params": list(deep.parameters()) + list(predictor.parameters()),
                 "lr": training_args.deep_lr_joint,
@@ -484,6 +494,6 @@ def fit_combined3_link(config, dataset, training_args, Logger, log, seeds, save_
             )
             Logger.add_to_run(loss=np.mean(loss_list), results=results)
 
-    Logger.end_run()
+        Logger.end_run()
     Logger.save_results(save_path + "/combined_comb3_results.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

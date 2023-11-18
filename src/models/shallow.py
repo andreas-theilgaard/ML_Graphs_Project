@@ -19,9 +19,11 @@ from src.models.metrics import METRICS
 
 def decoder(decode_type, beta, z_i, z_j):
     if decode_type == "dot":
-        return (z_i * z_j).sum(dim=-1)
+        return beta + ((z_i * z_j).sum(dim=-1))
     elif decode_type == "dist":
         return beta - torch.norm(z_i - z_j, dim=-1)
+    elif decode_type == "L2_Sq":
+        return beta - (torch.norm(z_i - z_j, dim=-1) ** 2)
     else:
         raise ValueError("Decoder method not yet implemented")
 
@@ -64,7 +66,7 @@ class ShallowModel(nn.Module):
         self.embeddings = nn.Embedding(num_nodes, embedding_dim, _weight=init_embeddings).to(device)
         self.decoder_type = decoder_type
         # make β as a trainable parameter
-        self.beta = nn.Parameter(torch.tensor(beta)) if decoder_type in ["dist"] else None
+        self.beta = nn.Parameter(torch.tensor(beta)) if decoder_type in ["dist", "dot", "L2_Sq"] else None
 
     def forward(self, node_i, node_j):
         z_i = self.embeddings(node_i)
@@ -333,6 +335,14 @@ class ShallowTrainer:
 
         NUMBER_NODES = data.num_nodes
 
+        if self.config.dataset.dataset_name == "ogbn-mag":
+            data = Data(
+                x=data.x_dict["paper"],
+                edge_index=data.edge_index_dict[("paper", "cites", "paper")],
+                y=data.y_dict["paper"],
+            )
+            NUMBER_NODES = data.x.shape[0]
+
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
         data = data.to(self.config.device)
@@ -343,8 +353,10 @@ class ShallowTrainer:
             if self.config.dataset.dataset_name in ["ogbl-collab", "ogbl-citation2"]:
                 split_edge = dataset.get_edge_split()
 
-            elif self.config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer"]:
-                train_data, val_data, test_data = get_link_data_split(data)
+            elif self.config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "PubMed", "Twitch"]:
+                train_data, val_data, test_data = get_link_data_split(
+                    data, dataset_name=self.config.dataset.dataset_name
+                )
                 edge_weight_in = data.edge_weight if "edge_weight" in data else None
                 edge_weight_in = edge_weight_in.float() if edge_weight_in else edge_weight_in
                 split_edge = {
@@ -375,12 +387,6 @@ class ShallowTrainer:
                     "target_node": split_edge["train"]["target_node"][idx],
                     "target_node_neg": split_edge["valid"]["target_node_neg"],
                 }
-        elif self.config.dataset.dataset_name == "ogbn-mag":
-            data = Data(
-                x=data.x_dict["paper"],
-                edge_index=data.edge_index_dict[("paper", "cites", "paper")],
-                y=data.y_dict["paper"],
-            )
 
         for seed in seeds:
             set_seed(seed)
@@ -490,6 +496,9 @@ class ShallowTrainer:
 
             self.save_embeddings(model, seed=seed)
             if "save_to_folder" in self.config:
+                create_path(self.config.save_to_folder)
+                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
+                create_path(f"{additional_save_path}")
                 torch.save(
                     model.embeddings.weight.data.cpu(),
                     additional_save_path + f"/shallow_embedding_seed_{seed}.pth",
