@@ -10,7 +10,7 @@ from torch_geometric.nn import GCNConv, SAGEConv
 from torch.utils.data import DataLoader
 import numpy as np
 from torch_geometric.utils import to_undirected, negative_sampling
-from src.models.utils import get_k_laplacian_eigenvectors
+from src.models.get_spectral import get_spectral
 from torch_geometric.utils import to_undirected
 
 
@@ -240,16 +240,11 @@ def GNN_unsupervised_trainer(dataset, config, training_args, log, save_path, see
         data.x = X
 
     if config.dataset[config.model_type].use_spectral:
-        if data.is_directed():
-            data.edge_index = to_undirected(data.edge_index)
-        X = get_k_laplacian_eigenvectors(
-            data=data,
-            dataset=dataset,
-            k=config.dataset[config.model_type].K,
-            is_undirected=True,
-            for_link=False,
-            edge_split=None,
-            num_nodes=data.x.shape[0],
+        X = get_spectral(
+            K=config.dataset[config.model_type].K,
+            task="NodeClassification",
+            dataset_name=config.dataset.dataset_name,
+            config=config,
         )
         data.x = torch.cat([data.x, X], dim=-1)
 
@@ -325,8 +320,11 @@ def GNN_unsupervised_trainer(dataset, config, training_args, log, save_path, see
         log.info(f"saved model at {model_save_path}")
         torch.save(model.state_dict(), model_save_path)
         if "save_to_folder" in config:
+            model.eval()
+            with torch.no_grad():
+                embeddings = model(data.x, dataset.data.edge_index)
             create_path(config.save_to_folder)
-            additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
+            additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
             create_path(f"{additional_save_path}")
             create_path(f"{additional_save_path}/models")
             used_emb = (
@@ -334,7 +332,5 @@ def GNN_unsupervised_trainer(dataset, config, training_args, log, save_path, see
                 if config.dataset.GNN_DIRECT.extra_info
                 else False
             )
-            MODEL_PATH = (
-                f"{additional_save_path}/models/{config.dataset.GNN_DIRECT.model}_{used_emb}_model_{seed}.pth"
-            )
-            torch.save(model.state_dict(), MODEL_PATH)
+            MODEL_PATH = f"{additional_save_path}/models/GNN_DIRECT_{config.dataset.GNN_DIRECT.model}_{used_emb}_model_{seed}_{config.dataset.GNN_DIRECT.use_spectral}.pth"
+            torch.save(embeddings, MODEL_PATH)

@@ -3,12 +3,14 @@ task: 'LinkPrediction'
 metrics: ['hits@10','hits@50','hits@100','acc']
 track_metric: 'hits@50'
 
+DIM: 16
+
 DownStream:
   saved_embeddings: False
   using_features: True
   use_spectral: False
   random: False
-  K: 16
+  K: ${dataset.DIM}
   training:
     epochs: 200
     num_layers: 3
@@ -20,7 +22,7 @@ DownStream:
 
 Node2Vec:
   training:
-    embedding_dim: 128
+    embedding_dim: ${dataset.DIM}
     walk_length: 80
     context_size: 20
     walks_per_node: 10
@@ -34,12 +36,14 @@ Node2Vec:
 GNN:
   model: 'GraphSage'
   extra_info: False
+  use_spectral: False
+  K: ${dataset.DIM}
   training:
-    hidden_channels: 256
+    hidden_channels: ${dataset.DIM}
     num_layers: 3
     dropout: 0.0
     lr: 0.01
-    epochs: 60
+    epochs: 400
     use_valedges: False
     batch_size: 65536
     weight_decay: 0
@@ -50,7 +54,7 @@ Shallow:
     lr: 0.1
     epochs: 20
     init_beta: 0.0
-    embedding_dim: 32
+    embedding_dim: ${dataset.DIM}
     init: 'laplacian'
     decode_type: 'dist'
     batch_size: 65536
@@ -59,23 +63,21 @@ Shallow:
 
 combined:
   type: 'comb3'
-  comb1:
+  comb2:
     training:
       shallow_lr: 0.1
       init_beta: 0.0
-      embedding_dim: 64
-      init: 'random'
+      embedding_dim: ${dataset.DIM}
+      init: 'laplacian'
       decode_type: 'dist'
 
-      direct: True
+
       deep_model: 'GraphSage'
-      deep_hidden_channels: 256
-      deep_lr: 0.005
-      deep_out_dim: 256
+      deep_hidden_channels: ${dataset.DIM}
+      deep_lr: 0.001
+      deep_out_dim: ${dataset.DIM}
       deep_num_layers: 3
-      deep_dropout: 0.1
-      deep_decode: 'dist'
-      gamma: 0.0
+      deep_dropout: 0.0
 
       balance: False
       warm_start: 100
@@ -89,52 +91,24 @@ combined:
       shallow_frozen_epochs: 0
       deep_frozen_epochs: 0
 
-  comb2:
-    training:
-      shallow_lr: 0.1
-      init_beta: 0.0
-      embedding_dim: 64
-      init: 'random'
-      decode_type: 'dist'
-
-
-      deep_model: 'GraphSage'
-      deep_hidden_channels: 256
-      deep_lr: 0.001
-      deep_out_dim: 256
-      deep_num_layers: 3
-      deep_dropout: 0.0
-
-      balance: False
-      warm_start: 100
-      joint_train: 400
-      shallow_lr_joint: 0.1
-      deep_lr_joint: 0.001
-      lambda_lr: 0.01
-      lambda_: 1.0
-      batch_size: 65536
-      direction: 'shallow_first'
-      shallow_frozen_epochs: 2
-      deep_frozen_epochs: 2
-
   comb3:
     training:
       shallow_lr: 0.1
       init_beta: 0.0
-      embedding_dim: 64
-      init: 'random'
+      embedding_dim: ${dataset.DIM}
+      init: 'laplacian'
       decode_type: 'dist'
 
 
       deep_model: 'GraphSage'
-      deep_hidden_channels: 256
+      deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.001
-      deep_out_dim: 256
+      deep_out_dim: ${dataset.DIM}
       deep_num_layers: 3
       deep_dropout: 0.0
 
       warm_start: 100
-      shallow_weight_decay: 0.0001
+      shallow_weight_decay: 0.0
       joint_train: 400
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.001
@@ -147,37 +121,4 @@ combined:
 
       MLP_HIDDEN_CHANNELS: 256
       MLP_LAYERS: 3
-      MLP_DROPOUT: 0.0
-
-
-  comb4:
-    training:
-      shallow_lr: 0.1
-      init_beta: 0.0
-      embedding_dim: 64
-      init: 'random'
-      decode_type: 'dist'
-
-
-      deep_model: 'GraphSage'
-      deep_hidden_channels: 256
-      deep_lr: 0.001
-      deep_out_dim: 256
-      deep_num_layers: 3
-      deep_dropout: 0.0
-      direct: True
-      gamma: 0.0
-      deep_decode: 'dist'
-
-
-      balance: False
-      warm_start: 100
-      joint_train: 400
-      shallow_lr_joint: 0.1
-      deep_lr_joint: 0.001
-      lambda_lr: 0.01
-      lambda_: 1.0
-      batch_size: 65536
-      direction: 'shallow_first'
-      shallow_frozen_epochs: 0
-      deep_frozen_epochs: 0
+      MLP_DROPOUT: 0.5

@@ -19,6 +19,7 @@ from src.models.shallow import ShallowModel, initialize_embeddings
 from src.models.metrics import METRICS
 from src.models.utils import prepare_metric_cols
 import numpy as np
+from src.models.utils import create_path
 
 
 @torch.no_grad()
@@ -331,7 +332,7 @@ def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_
             ).to(config.device)
         elif training_args.deep_model == "GCN":
             deep = GCN(
-                n_channels=data.num_features,
+                in_channels=data.num_features,
                 hidden_channels=training_args.deep_hidden_channels,
                 out_channels=training_args.deep_out_dim,
                 num_layers=training_args.deep_num_layers,
@@ -510,4 +511,9 @@ def fit_combined2_link(config, dataset, training_args, Logger, log, seeds, save_
 
         Logger.end_run()
     Logger.save_results(save_path + "/combined_comb2_results.json")
+    if "save_to_folder" in config:
+        create_path(config.save_to_folder)
+        additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
+        create_path(f"{additional_save_path}")
+        Logger.save_results(additional_save_path + f"/results_comb2_{training_args.deep_model}.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

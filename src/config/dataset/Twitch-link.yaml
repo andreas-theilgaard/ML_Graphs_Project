@@ -3,12 +3,14 @@ task: 'LinkPrediction'
 metrics: ['hits@10','hits@50','hits@100','acc','auc']
 track_metric: 'hits@50'
 
+DIM: 16
+
 DownStream:
   saved_embeddings: False
   using_features: True
   use_spectral: False
   random: False
-  K: 16
+  K: ${dataset.DIM}
   training:
     epochs: 200
     num_layers: 2
@@ -19,7 +21,7 @@ DownStream:
 
 Node2Vec:
   training:
-    embedding_dim: 16
+    embedding_dim: ${dataset.DIM}
     walk_length: 80
     context_size: 20
     walks_per_node: 10
@@ -33,8 +35,10 @@ Node2Vec:
 GNN:
   model: 'GraphSage'
   extra_info: False
+  use_spectral: False
+  K: ${dataset.DIM}
   training:
-    hidden_channels: 16
+    hidden_channels: ${dataset.DIM}
     num_layers: 2
     dropout: 0.0
     lr: 0.01
@@ -48,7 +52,7 @@ Shallow:
     lr: 0.001
     epochs: 500
     init_beta: 0.0
-    embedding_dim: 16
+    embedding_dim: ${dataset.DIM}
     init: 'laplacian'
     decode_type: 'dist'
     batch_size: 1024
@@ -62,16 +66,16 @@ combined:
     training:
       shallow_lr: 0.001
       init_beta: 0.0
-      embedding_dim: 16
+      embedding_dim: ${dataset.DIM}
       init: 'laplacian'
       decode_type: 'dist'
       weight_decay_shallow: 0.00001
 
 
-      deep_model: 'GCN'
-      deep_hidden_channels: 16
+      deep_model: 'GraphSage'
+      deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.01
-      deep_out_dim: 16
+      deep_out_dim: ${dataset.DIM}
       deep_num_layers: 2
       deep_dropout: 0.0
       weight_decay_deep: 0.0
@@ -92,16 +96,16 @@ combined:
     training:
       shallow_lr: 0.001
       init_beta: 0.0
-      embedding_dim: 16
+      embedding_dim: ${dataset.DIM}
       init: 'laplacian'
       decode_type: 'dist'
       weight_decay_shallow: 0.00001
 
 
-      deep_model: 'GCN'
-      deep_hidden_channels: 16
+      deep_model: 'GraphSage'
+      deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.01
-      deep_out_dim: 16
+      deep_out_dim: ${dataset.DIM}
       deep_num_layers: 2
       deep_dropout: 0.0
 

@@ -116,9 +116,7 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
     Logger.save_results(save_path + "/results.json")
     if "save_to_folder" in config:
         create_path(config.save_to_folder)
-        additional_save_path = (
-            f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
-        )
+        additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
         create_path(f"{additional_save_path}")
         saved_embeddings_path = (
             False

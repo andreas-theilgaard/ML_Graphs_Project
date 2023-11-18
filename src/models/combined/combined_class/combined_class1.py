@@ -12,6 +12,7 @@ from src.models.utils import prepare_metric_cols
 import copy
 from src.models.combined.combined_class.combined_class_utils import NodeClassifier, test_MLP, SAGE, GCN
 from torch_geometric.data import Data
+from src.models.utils import create_path
 
 
 def warm_train(
@@ -337,4 +338,10 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
 
         Logger.end_run()
     Logger.save_results(save_path + "/combined_comb1_class_results.json")
+
+    if "save_to_folder" in config:
+        create_path(config.save_to_folder)
+        additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
+        create_path(f"{additional_save_path}")
+        Logger.save_results(additional_save_path + f"/results_comb1_{training_args.deep_model}.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

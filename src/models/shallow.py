@@ -478,7 +478,7 @@ class ShallowTrainer:
                         if "save_to_folder" in self.config:
                             if not self.FOLDERS_CREATED:
                                 create_path(self.config.save_to_folder)
-                                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
+                                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.dataset.DIM}/{self.config.model_type}"
                                 create_path(f"{additional_save_path}")
                                 self.FOLDERS_CREATED = True
                             torch.save(
@@ -497,7 +497,7 @@ class ShallowTrainer:
             self.save_embeddings(model, seed=seed)
             if "save_to_folder" in self.config:
                 create_path(self.config.save_to_folder)
-                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
+                additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.dataset.DIM}/{self.config.model_type}"
                 create_path(f"{additional_save_path}")
                 torch.save(
                     model.embeddings.weight.data.cpu(),

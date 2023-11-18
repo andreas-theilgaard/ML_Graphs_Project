@@ -305,6 +305,7 @@ def test(config, model, predictor, data, split_edge, evaluator, batch_size):
 def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger=None, seeds=None):
     data = dataset[0]
     edge_index = data.edge_index
+
     if "edge_weight" in data:
         data.edge_weight = data.edge_weight.view(-1).to(torch.float)
 
@@ -360,8 +361,6 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
         data.x = X
 
     if config.dataset[config.model_type].use_spectral:
-        if data.is_directed():
-            data.edge_index = to_undirected(data.edge_index)
         X = get_k_laplacian_eigenvectors(
             data=(split_edge["train"]["edge"]).T,
             dataset=dataset,
@@ -485,7 +484,7 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
         torch.save(model.state_dict(), model_save_path)
         if "save_to_folder" in config:
             create_path(config.save_to_folder)
-            additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.model_type}"
+            additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
             create_path(f"{additional_save_path}")
             create_path(f"{additional_save_path}/models")
             used_emb = (
@@ -497,7 +496,10 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             torch.save(model.state_dict(), MODEL_PATH)
 
     if "save_to_folder" in config:
-        Logger.save_results(additional_save_path + f"/results_{config.dataset.GNN.model}_{used_emb}.json")
+        Logger.save_results(
+            additional_save_path
+            + f"/results_{config.dataset.GNN.model}_{used_emb}_{config.dataset.GNN.use_spectral}.json"
+        )
 
     Logger.save_results(save_path + "/results.json")
     Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

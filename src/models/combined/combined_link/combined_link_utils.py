@@ -80,7 +80,7 @@ class ModelWeights:
 
 def decode(W, node_i, node_j, gamma, type_):
     if type_ == "dot":
-        return (W[node_i] * W[node_j]).sum(dim=-1)
+        return gamma + ((W[node_i] * W[node_j]).sum(dim=-1))
     elif type_ == "dist":
         return gamma - torch.norm(W[node_i, :] - W[node_j, :], dim=-1)
 

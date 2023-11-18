@@ -54,7 +54,7 @@ class Node2Vec:
         )
         if "save_to_folder" in self.config:
             create_path(self.config.save_to_folder)
-            additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.model_type}"
+            additional_save_path = f"{self.config.save_to_folder}/{self.config.dataset.task}/{self.config.dataset.dataset_name}/{self.config.dataset.DIM}/{self.config.model_type}"
             create_path(additional_save_path)
             torch.save(
                 self.model.embedding.weight.data.cpu(), additional_save_path + "/Node2Vec_embedding.pth"

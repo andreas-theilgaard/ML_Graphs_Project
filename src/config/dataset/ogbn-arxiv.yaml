@@ -3,12 +3,14 @@ task: 'NodeClassification'
 metrics: ['acc','f1-micro','f1-macro']
 track_metric: 'acc'
 
+DIM: 16
+
 DownStream:
   saved_embeddings: False
   using_features: True
   use_spectral: False
   random: False
-  K: 16
+  K: ${dataset.DIM}
   training:
     epochs: 100
     num_layers: 3
@@ -20,7 +22,7 @@ DownStream:
 
 Node2Vec:
   training:
-    embedding_dim: 128
+    embedding_dim: ${dataset.DIM}
     walk_length: 80
     context_size: 20
     walks_per_node: 10
@@ -34,8 +36,10 @@ Node2Vec:
 GNN:
   model: 'GraphSage'
   extra_info: False
+  use_spectral: False
+  K: ${dataset.DIM}
   training:
-    hidden_channels: 256
+    hidden_channels: ${dataset.DIM}
     num_layers: 3
     dropout: 0.5
     lr: 0.01
@@ -47,29 +51,29 @@ GNN:
 GNN_DIRECT:
   model: 'GraphSage'
   extra_info: False
+  use_spectral: False
+  K: ${dataset.DIM}
   training:
-    hidden_channels: 256
+    hidden_channels: ${dataset.DIM}
     num_layers: 3
     dropout: 0.0
     lr: 0.01
-    epochs: 50
+    epochs: 400
     weight_decay: 0
     decode_type: 'dot'
     init_beta: 0.0
-    train_batch: False
+    train_batch: True
     batch_size: 65536
-
-
 
 Shallow:
   training:
     lr: 0.1
-    epochs: 50
+    epochs: 400
     init_beta: 0.0
-    embedding_dim: 2
+    embedding_dim: ${dataset.DIM}
     init: 'laplacian'
     decode_type: 'dist'
-    train_batch: False
+    train_batch: True
     batch_size: 65536
     weight_decay: 0
 
@@ -80,14 +84,14 @@ combined:
     training:
       shallow_lr: 0.1
       init_beta: 0.0
-      embedding_dim: 64
+      embedding_dim: ${dataset.DIM}
       init: 'laplacian'
       decode_type: 'dist'
 
       deep_model: 'GraphSage'
-      deep_hidden_channels: 256
+      deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.01
-      deep_out_dim: 64
+      deep_out_dim: ${dataset.DIM}
       deep_num_layers: 3
       deep_dropout: 0.0
       deep_decode: 'dist'
@@ -99,8 +103,6 @@ combined:
       MLP_LR: 0.01
       MLP_EPOCHS: 500
       APPLY_BATCHNORM: True
-
-
 
       balance: False
       warm_start: 100
@@ -118,29 +120,29 @@ combined:
     training:
       shallow_lr: 0.1
       init_beta: 0.0
-      embedding_dim: 64
+      embedding_dim: ${dataset.DIM}
       init: 'laplacian'
       decode_type: 'dist'
-      SHALLOW_WARM_START: 30
+      SHALLOW_WARM_START: 150
       SHALLOW_TRAIN_BATCH: True
       SHALLOW_WARM_BATCH_SIZE: 65536
 
 
       deep_model: 'GraphSage'
-      deep_hidden_channels: 256
+      deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.01
-      deep_out_dim: 256
+      deep_out_dim: ${dataset.DIM}
       deep_num_layers: 3
       deep_dropout: 0.5
 
       MLP_HIDDEN: 256
-      MLP_NUM_LAYERS: 2
-      MLP_DROPOUT: 0.0
+      MLP_NUM_LAYERS: 3
+      MLP_DROPOUT: 0.5
       MLP_LR: 0.01
       APPLY_BATCHNORM: True
 
       epochs: 400
       batch_size: 65536
-      direction: 'deep_first'
-      shallow_frozen_epochs: 100
-      deep_frozen_epochs: 100
+      direction: 'shallow_first'
+      shallow_frozen_epochs: 200
+      deep_frozen_epochs: 400
