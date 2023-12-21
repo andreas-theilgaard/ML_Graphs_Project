@@ -4,13 +4,15 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import numpy as np
-from ogb.linkproppred import Evaluator
 from src.models.logger import LoggerClass
 from src.models.utils import set_seed
 from src.models.utils import prepare_metric_cols
 from torch_geometric.utils import negative_sampling
 from src.models.utils import get_k_laplacian_eigenvectors
 from torch_geometric.utils import to_undirected
+from src.models.metrics import METRICS
+from src.models.utils import create_path
+from src.data.data_utils import get_link_data_split
 
 
 class LinkPredictor(nn.Module):
@@ -59,6 +61,7 @@ class MLP_LinkPrediction:
         log,
         save_path,
         logger,
+        config,
     ):
         self.device = device
         self.model = LinkPredictor(
@@ -72,6 +75,37 @@ class MLP_LinkPrediction:
         self.log = log
         self.save_path = save_path
         self.logger = logger
+        self.config = config
+
+    def train_citation(self, X, split_edge, optimizer, batch_size):
+        self.model.train()
+
+        source_edge = split_edge["train"]["source_node"].to(self.device)
+        target_edge = split_edge["train"]["target_node"].to(self.device)
+
+        total_loss = total_examples = 0
+        for perm in DataLoader(range(source_edge.size(0)), batch_size, shuffle=True):
+            optimizer.zero_grad()
+
+            src, dst = source_edge[perm], target_edge[perm]
+
+            pos_out = self.model(X[src], X[dst])
+            pos_loss = -torch.log(pos_out + 1e-15).mean()
+
+            # Just do some trivial random sampling.
+            dst_neg = torch.randint(0, X.size(0), src.size(), dtype=torch.long, device=self.device)
+            neg_out = self.model(X[src], X[dst_neg])
+            neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
+
+            loss = pos_loss + neg_loss
+            loss.backward()
+            optimizer.step()
+
+            num_examples = pos_out.size(0)
+            total_loss += loss.item() * num_examples
+            total_examples += num_examples
+
+        return total_loss / total_examples
 
     def train(self, X, split_edge, optimizer, batch_size):
         self.model.train()
@@ -104,22 +138,27 @@ class MLP_LinkPrediction:
     def test(self, x, split_edge, evaluator, batch_size):
         self.model.eval()
 
-        # get training edges
-        pos_train_edge = split_edge["train"]["edge"].to(x.device)
+        pos_train_edge = split_edge["train"]["edge"].to(self.device)
+        if self.config.dataset.dataset_name in ["ogbl-vessel"]:
+            neg_train_edge = split_edge["train"]["edge_neg"].to(self.device)
 
-        # get validation edges
-        pos_valid_edge = split_edge["valid"]["edge"].to(x.device)
-        neg_valid_edge = split_edge["valid"]["edge_neg"].to(x.device)
-
-        # get test edges
-        pos_test_edge = split_edge["test"]["edge"].to(x.device)
-        neg_test_edge = split_edge["test"]["edge_neg"].to(x.device)
+        pos_valid_edge = split_edge["valid"]["edge"].to(self.device)
+        neg_valid_edge = split_edge["valid"]["edge_neg"].to(self.device)
+        pos_test_edge = split_edge["test"]["edge"].to(self.device)
+        neg_test_edge = split_edge["test"]["edge_neg"].to(self.device)
 
         pos_train_preds = []
         for perm in DataLoader(range(pos_train_edge.size(0)), batch_size):
             edge = pos_train_edge[perm].t()
             pos_train_preds += [self.model(x[edge[0]], x[edge[1]]).squeeze().cpu()]
         pos_train_pred = torch.cat(pos_train_preds, dim=0)
+
+        if self.config.dataset.dataset_name in ["ogbl-vessel"]:
+            neg_train_preds = []
+            for perm in DataLoader(range(neg_train_edge.size(0)), batch_size):
+                edge = neg_train_edge[perm].t()
+                neg_train_preds += [self.model(x[edge[0]], x[edge[1]]).squeeze().cpu()]
+            neg_train_pred = torch.cat(neg_train_preds, dim=0)
 
         pos_valid_preds = []
         for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
@@ -145,29 +184,56 @@ class MLP_LinkPrediction:
             neg_test_preds += [self.model(x[edge[0]], x[edge[1]]).squeeze().cpu()]
         neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
-        results = {}
-        for K in [10, 50, 100]:
-            evaluator.K = K
-            train_hits = evaluator.eval(
-                {
-                    "y_pred_pos": pos_train_pred,
-                    "y_pred_neg": neg_valid_pred,
-                }
-            )[f"hits@{K}"]
-            valid_hits = evaluator.eval(
-                {
-                    "y_pred_pos": pos_valid_pred,
-                    "y_pred_neg": neg_valid_pred,
-                }
-            )[f"hits@{K}"]
-            test_hits = evaluator.eval(
-                {
-                    "y_pred_pos": pos_test_pred,
-                    "y_pred_neg": neg_test_pred,
-                }
-            )[f"hits@{K}"]
+        if self.config.dataset.dataset_name in ["ogbl-vessel"]:
+            predictions = {
+                "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_train_pred},
+                "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+                "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+            }
+        else:
+            predictions = {
+                "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+                "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+                "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+            }
+        results = evaluator.collect_metrics(predictions)
+        return results
 
-            results[f"hits@{K}"] = (train_hits, valid_hits, test_hits)
+    @torch.no_grad()
+    def test_citation(self, x, split_edge, evaluator, batch_size):
+        self.model.eval()
+
+        def test_split(split):
+            source = split_edge[split]["source_node"].to(x.device)
+            target = split_edge[split]["target_node"].to(x.device)
+            target_neg = split_edge[split]["target_node_neg"].to(x.device)
+
+            pos_preds = []
+            for perm in DataLoader(range(source.size(0)), batch_size):
+                src, dst = source[perm], target[perm]
+                pos_preds += [self.model(x[src], x[dst]).squeeze().cpu()]
+            pos_pred = torch.cat(pos_preds, dim=0)
+
+            neg_preds = []
+            source = source.view(-1, 1).repeat(1, 1000).view(-1)
+            target_neg = target_neg.view(-1)
+            for perm in DataLoader(range(source.size(0)), batch_size):
+                src, dst_neg = source[perm], target_neg[perm]
+                neg_preds += [self.model(x[src], x[dst_neg]).squeeze().cpu()]
+            neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
+
+            return pos_pred, neg_pred
+
+        train = test_split("eval_train")
+        valid = test_split("valid")
+        test = test_split("test")
+
+        predictions = {
+            "train": {"y_pred_pos": train[0], "y_pred_neg": train[1]},
+            "val": {"y_pred_pos": valid[0], "y_pred_neg": valid[1]},
+            "test": {"y_pred_pos": test[0], "y_pred_neg": test[1]},
+        }
+        results = evaluator.collect_metrics(predictions)
 
         return results
 
@@ -176,33 +242,61 @@ class MLP_LinkPrediction:
         prog_bar = tqdm(range(epochs))
 
         for i, epoch in enumerate(prog_bar):
-            loss = self.train(X, split_edge, optimizer, batch_size)
-            results = self.test(X, split_edge=split_edge, evaluator=evaluator, batch_size=batch_size)
+            loss = (
+                self.train(X, split_edge, optimizer, batch_size)
+                if self.config.dataset.dataset_name != "ogbl-citation2"
+                else self.train_citation(X, split_edge, optimizer, batch_size)
+            )
+
+            results = (
+                self.test(X, split_edge=split_edge, evaluator=evaluator, batch_size=batch_size)
+                if self.config.dataset.dataset_name != "ogbl-citation2"
+                else self.test_citation(X, split_edge=split_edge, evaluator=evaluator, batch_size=batch_size)
+            )
             prog_bar.set_postfix(
                 {
                     "Train Loss": loss,
-                    "Train hits@50.": results["hits@50"][0],
-                    "Val hits@50.": results["hits@50"][1],
-                    "Test hits@50.": results["hits@50"][2],
+                    f"Train {self.config.dataset.track_metric}": results["train"][
+                        self.config.dataset.track_metric
+                    ],
+                    f"Val {self.config.dataset.track_metric}": results["val"][
+                        self.config.dataset.track_metric
+                    ],
+                    f"Test {self.config.dataset.track_metric}": results["test"][
+                        self.config.dataset.track_metric
+                    ],
                 }
             )
-            self.logger.add_to_run(
-                np.array(
-                    [
-                        loss,
-                        results["hits@50"][0],
-                        results["hits@50"][1],
-                        results["hits@50"][2],
-                    ]
-                )
-            )
-        self.logger.save_value({"loss": loss, "hits@50": results["hits@50"][2]})
+
+            self.logger.add_to_run(loss=loss, results=results)
+
+        self.logger.save_value(
+            {
+                "loss": loss,
+                f"Test {self.config.dataset.track_metric}": results["test"][self.config.dataset.track_metric],
+            }
+        )
 
 
 def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Logger):
     data = dataset[0]
-    if config.dataset.dataset_name in ["ogbl-collab"]:
+    if config.dataset.dataset_name in ["ogbl-collab", "ogbl-vessel", "ogbl-citation2"]:
         split_edge = dataset.get_edge_split()
+    elif config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "PubMed", "Twitch"]:
+        train_data, val_data, test_data = get_link_data_split(data, dataset_name=config.dataset.dataset_name)
+        edge_weight_in = data.edge_weight if "edge_weight" in data else None
+        edge_weight_in = edge_weight_in.float() if edge_weight_in else edge_weight_in
+        split_edge = {
+            "train": {"edge": train_data.pos_edge_label_index.T, "weight": edge_weight_in},
+            "valid": {
+                "edge": val_data.pos_edge_label_index.T,
+                "edge_neg": val_data.neg_edge_label_index.T,
+            },
+            "test": {
+                "edge": test_data.pos_edge_label_index.T,
+                "edge_neg": test_data.neg_edge_label_index.T,
+            },
+        }
 
     if (
         config.dataset[config.model_type].saved_embeddings
@@ -225,12 +319,24 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
         x = get_k_laplacian_eigenvectors(
-            data=data, dataset=dataset, k=config.dataset[config.model_type].K, is_undirected=True
+            data=(split_edge["train"]["edge"]).T,
+            dataset=dataset,
+            k=config.dataset[config.model_type].K,
+            is_undirected=True,
+            num_nodes=data.x.shape[0],
+            for_link=True,
+            edge_split=split_edge,
         )
+
+    if config.dataset[config.model_type].random:
+        x = torch.normal(0, 1, (data.x.shape[0], 128))
 
     X = x.to(config.device)
 
-    evaluator = Evaluator(name=config.dataset.dataset_name)
+    # evaluator = Evaluator(name=config.dataset.dataset_name)
+    evaluator = METRICS(
+        metrics_list=config.dataset.metrics, task=config.dataset.task, dataset=config.dataset.dataset_name
+    )
 
     for seed in seeds:
         set_seed(seed=seed)
@@ -246,6 +352,7 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
             log=log,
             save_path=save_path,
             logger=Logger,
+            config=config,
         )
         model.fit(
             X=X,
@@ -258,7 +365,18 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
         Logger.end_run()
 
     Logger.save_results(save_path + "/results.json")
-    Logger.get_statistics(
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        directions=["-", "+", "+", "+"],
-    )
+    if "save_to_folder" in config:
+        create_path(config.save_to_folder)
+        additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
+        create_path(f"{additional_save_path}")
+        saved_embeddings_path = (
+            False
+            if not config.dataset.DownStream.saved_embeddings
+            else (config.dataset.DownStream.saved_embeddings.split("/"))[-1]
+        )
+        print(saved_embeddings_path)
+        Logger.save_results(
+            additional_save_path
+            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}_{config.dataset.DownStream.random}.json"
+        )
+    Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))

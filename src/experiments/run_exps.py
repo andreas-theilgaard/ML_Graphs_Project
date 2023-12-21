@@ -2,15 +2,17 @@ import hydra
 from omegaconf import OmegaConf
 import logging
 from src.data.get_data import DataLoader
+from src.data.data_utils import get_link_data_split
 from torch_geometric.utils import to_undirected
 from src.models.utils import get_seeds
 from src.models.logger import LoggerClass
 from src.models.utils import prepare_metric_cols
-import sys
+from torch_geometric.data import Data
 
 # Node Classification
 from src.models.NodeClassification.mlp_nodeclass import mlp_node_classification
 from src.models.NodeClassification.GNN import GNN_trainer
+from src.models.NodeClassification.GNN_unsupervised import GNN_unsupervised_trainer
 
 # Link Prediction
 # from src.models.mlp_linkpredict import mlp_LinkPrediction
@@ -21,6 +23,9 @@ from src.models.LinkPrediction.GNN_link import GNN_link_trainer
 from src.models.Node2Vec import Node2Vec
 from src.models.shallow import ShallowTrainer
 
+# Combined
+from src.models.combined.run_combined_link import fit_combined_link
+from src.models.combined.run_combined_class import fit_combined_class
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -42,7 +47,10 @@ def main(config):
     log.info(f"\nConfigurations for current experiment:\n\nConfiguration: \n {OmegaConf.to_yaml(config)}")
     hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
     model_args = config.dataset[config.model_type]
-    training_args = model_args.training
+    if config.model_type == "combined":
+        training_args = model_args[model_args.type].training
+    else:
+        training_args = model_args.training
     save_path = hydra_cfg["runtime"]["output_dir"]
 
     # get seeds
@@ -52,11 +60,13 @@ def main(config):
         metrics=prepare_metric_cols(config.dataset.metrics),
         seeds=seeds,
         log=log,
+        track_metric=config.dataset.track_metric,
+        track_best=False if config.model_type != "Shallow" else True,
     )
 
     # get data
     dataset = DataLoader(
-        task_type=config.task,
+        task_type=config.dataset.task,
         dataset=config.dataset.dataset_name,
         model_name=config.model_type,
         log=log,
@@ -66,7 +76,7 @@ def main(config):
     # Downstream
     ###########################################
     if config.model_type == "DownStream":
-        if config.task == "NodeClassification":
+        if config.dataset.task == "NodeClassification":
             mlp_node_classification(
                 dataset=dataset,
                 config=config,
@@ -76,7 +86,7 @@ def main(config):
                 seeds=seeds,
                 Logger=Logger,
             )
-        elif config.task == "LinkPrediction":
+        elif config.dataset.task == "LinkPrediction":
             mlp_LinkPrediction(
                 dataset=dataset,
                 config=config,
@@ -92,13 +102,17 @@ def main(config):
     ###########################################
     elif config.model_type == "Node2Vec":
         data = dataset[0]
-        if data.is_directed():
-            data.edge_index = to_undirected(data.edge_index, num_nodes=data.num_nodes)
-        # If LinkPrediciton should problably do some more here
+        only_train = False
+        if config.dataset.task == "LinkPrediction":
+            if data.is_directed():
+                data.edge_index = to_undirected(data.edge_index)
+            train_data, _, _ = get_link_data_split(data, dataset_name=config.dataset.dataset_name)
+
         model = Node2Vec(
-            edge_index=data.edge_index,
+            edge_index=train_data.edge_index if only_train else data.edge_index,
             device=config.device,
             save_path=save_path,
+            config=config,
             embedding_dim=training_args.embedding_dim,
             walk_length=training_args.walk_length,
             walks_per_node=training_args.walks_per_node,
@@ -117,7 +131,7 @@ def main(config):
     # GNN
     ###########################################
     elif config.model_type == "GNN":
-        if config.task == "NodeClassification":
+        if config.dataset.task == "NodeClassification":
             GNN_trainer(
                 dataset=dataset,
                 config=config,
@@ -127,7 +141,7 @@ def main(config):
                 seeds=seeds,
                 Logger=Logger,
             )
-        elif config.task == "LinkPrediction":
+        elif config.dataset.task == "LinkPrediction":
             GNN_link_trainer(
                 dataset=dataset,
                 config=config,
@@ -137,6 +151,20 @@ def main(config):
                 log=log,
                 Logger=Logger,
             )
+
+    ###########################################
+    # GNN unsupervised
+    ###########################################
+    elif config.model_type == "GNN_DIRECT" and config.dataset.task == "NodeClassification":
+        GNN_unsupervised_trainer(
+            dataset=dataset,
+            config=config,
+            training_args=training_args,
+            log=log,
+            save_path=save_path,
+            seeds=seeds,
+            Logger=Logger,
+        )
 
     ###########################################
     # Shallow
@@ -154,9 +182,27 @@ def main(config):
     ###########################################
     # Combined
     ###########################################
-    elif config.model_type == "Combined":
-        print("not implemented yet")
-
+    elif config.model_type == "combined":
+        if config.dataset.task == "LinkPrediction":
+            fit_combined_link(
+                config=config,
+                dataset=dataset,
+                training_args=training_args,
+                Logger=Logger,
+                log=log,
+                seeds=seeds,
+                save_path=save_path,
+            )
+        elif config.dataset.task == "NodeClassification":
+            fit_combined_class(
+                config=config,
+                dataset=dataset,
+                training_args=training_args,
+                Logger=Logger,
+                log=log,
+                seeds=seeds,
+                save_path=save_path,
+            )
     else:
         raise ValueError(f"The specified model type, {config.model_type} is not yet supported.")
 

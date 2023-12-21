@@ -1,24 +1,23 @@
-dataset_name: 'ogbl-collab'
+dataset_name: 'Flickr'
 task: 'LinkPrediction'
-metrics: ['hits@10','hits@50','hits@100','acc']
-track_metric: 'hits@50'
+metrics: ['hits@10','hits@50','hits@100','acc','auc','roc_auc']
+track_metric: 'hits@100'
 
-DIM: 128
+DIM: 16
 
 DownStream:
   saved_embeddings: False
   using_features: True
   use_spectral: False
-  random: False
   K: ${dataset.DIM}
+  random: False
   training:
     epochs: 200
-    num_layers: 3
-    dropout: 0.0
+    num_layers: 2
+    dropout: 0.5
     lr: 0.01
-    hidden_channels: 256
+    hidden_channels: 128
     batch_size: 65536
-    weight_decay: 0
 
 Node2Vec:
   training:
@@ -26,7 +25,7 @@ Node2Vec:
     walk_length: 80
     context_size: 20
     walks_per_node: 10
-    epochs: 5
+    epochs: 20
     lr: 0.01
     batch_size: 256
     num_negative_samples: 1
@@ -34,93 +33,94 @@ Node2Vec:
     num_workers: 4
 
 GNN:
-  model: 'GAT'
+  model: 'GraphSage'
   extra_info: False
   use_spectral: False
   K: ${dataset.DIM}
   training:
     hidden_channels: ${dataset.DIM}
-    num_layers: 3
+    num_layers: 2
     dropout: 0.0
-    lr: 0.01
-    epochs: 400
-    use_valedges: False
+    lr: 0.001
+    epochs: 500
     batch_size: 65536
-    weight_decay: 0
+    weight_decay: 0.000001
 
 
 Shallow:
   training:
-    lr: 0.1
-    epochs: 20
+    lr: 0.01
+    epochs: 300
     init_beta: 0.0
     embedding_dim: ${dataset.DIM}
     init: 'laplacian'
     decode_type: 'dist'
     batch_size: 65536
-    train_batch: False
-    weight_decay: 0
+    weight_decay: 0.000001
+    train_batch: True
+
 
 combined:
-  type: 'comb2'
+  type: 'comb3'
   comb2:
     training:
-      shallow_lr: 0.1
+      shallow_lr: 0.01
       init_beta: 0.0
       embedding_dim: ${dataset.DIM}
       init: 'laplacian'
       decode_type: 'dist'
-      weight_decay_shallow: 0
+      weight_decay_shallow: 0.000001
 
 
       deep_model: 'GraphSage'
       deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.001
       deep_out_dim: ${dataset.DIM}
-      deep_num_layers: 3
+      deep_num_layers: 2
       deep_dropout: 0.0
-      weight_decay_deep: 0
+      weight_decay_deep: 0.0
 
       balance: False
-      warm_start: 100
-      joint_train: 400
-      shallow_lr_joint: 0.1
+      warm_start: 500
+      joint_train: 300
+      shallow_lr_joint: 0.01
       deep_lr_joint: 0.001
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 65536
       direction: 'deep_first'
-      shallow_frozen_epochs: 200
-      deep_frozen_epochs: 200
+      shallow_frozen_epochs: 150
+      deep_frozen_epochs: 150
 
   comb3:
     training:
-      shallow_lr: 0.1
+      shallow_lr: 0.01
       init_beta: 0.0
       embedding_dim: ${dataset.DIM}
       init: 'laplacian'
       decode_type: 'dist'
+      weight_decay_shallow: 0.000001
 
 
       deep_model: 'GraphSage'
       deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.001
       deep_out_dim: ${dataset.DIM}
-      deep_num_layers: 3
+      deep_num_layers: 2
       deep_dropout: 0.0
 
-      warm_start: 100
-      shallow_weight_decay: 0.0
-      joint_train: 400
-      shallow_lr_joint: 0.1
+      warm_start: 500
+      joint_train: 300
+      shallow_lr_joint: 0.01
       deep_lr_joint: 0.001
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 65536
       direction: 'deep_first'
       shallow_frozen_epochs: 0
-      deep_frozen_epochs: 400
+      deep_frozen_epochs: 300
 
-      MLP_HIDDEN_CHANNELS: ${dataset.DIM}
-      MLP_LAYERS: 3
+
+      MLP_HIDDEN_CHANNELS: 16
+      MLP_LAYERS: 2
       MLP_DROPOUT: 0.0

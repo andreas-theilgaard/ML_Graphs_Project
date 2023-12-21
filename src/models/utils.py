@@ -4,6 +4,11 @@ from pathlib import Path
 import random
 import numpy as np
 from torch_geometric.utils import get_laplacian, to_scipy_sparse_matrix
+from torch_geometric.utils import negative_sampling
+
+
+def get_negative_samples(edge_index, num_nodes, num_neg_samples):
+    return negative_sampling(edge_index, num_neg_samples=num_neg_samples, num_nodes=num_nodes)
 
 
 def prepare_metric_cols(metrics):
@@ -18,9 +23,10 @@ def prepare_metric_cols(metrics):
 
 
 def get_seeds(n=10):
-    n = min(n, 10)
-    seeds = [42, 33, 18, 34, 77, 84, 20, 32, 90, 82]
-    return seeds[:n]
+    # n = min(n, 10)
+    # seeds = [42, 33, 18, 34, 77, 84, 20, 32, 90, 82]
+    # return seeds[:n]
+    return list(range(n))
 
 
 def set_seed(seed):
@@ -53,12 +59,14 @@ def cur_time():
 
 
 def get_k_laplacian_eigenvectors(
+    num_nodes,
     data,
     dataset,
     k,
     is_undirected: bool = True,
     SPARSE_THRESHOLD: int = 100,
     for_link: bool = False,
+    edge_split=None,
 ):
     """
     Computes the k first non-trivial eigenvectors for the normalized laplacian matrix
@@ -79,11 +87,19 @@ def get_k_laplacian_eigenvectors(
         k first non-trivial eigenvectors
     """
     # print("Getting Laplacian eigenvectors")
-    num_nodes = dataset.num_nodes
+    num_nodes = num_nodes
     is_undirected = True
     if for_link:
-        edge_split = dataset.get_edge_split()
-        edge_weight_in = ((edge_split["train"]["weight"]).unsqueeze(1)).float()
+        try:
+            if isinstance(edge_split["train"]["weight"], torch.Tensor):
+                edge_weight_in = ((edge_split["train"]["weight"])).float()
+                if len(edge_weight_in.shape) == 1:
+                    edge_weight_in = edge_weight_in.unsqueeze(1)
+            else:
+                edge_weight_in = None
+        except:
+            edge_weight_in = None
+
         edge_index, edge_weight = get_laplacian(
             data, edge_weight_in, normalization="sym", num_nodes=num_nodes
         )

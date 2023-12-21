@@ -26,18 +26,23 @@ class DataLoader:
             "LinkPrediction",
         ], f"Expect task_type to be either 'NodeClassification' or 'LinkPrediction' but received {self.task_type}"
 
-        if self.dataset in ["ogbn-arxiv", "ogbn-products"] and self.task_type == "LinkPrediction":
+        if self.dataset in ["ogbn-arxiv", "ogbn-products", "ogbn-mag"] and self.task_type == "LinkPrediction":
             raise ValueError(f"{self.dataset} can only be used for NodeClassification")
-        if self.dataset in ["ogbl-collab", "ogbl-ppa"] and self.task_type == "NodeClassification":
+        if (
+            self.dataset in ["ogbl-collab", "ogbl-ppa", "ogbl-vessel", "ogbl-citation2"]
+            and self.task_type == "NodeClassification"
+        ):
             raise ValueError(f"{self.dataset} can only be used for LinkPrediction")
 
     def get_NodeClassification_dataset(self):
-        if self.dataset in ["ogbn-arxiv", "ogbn-products"]:
+        if self.dataset in ["ogbn-arxiv"]:
             dataset = (
                 PygNodePropPredDataset(name=self.dataset, root="data")
-                if self.model_name != "GNN"
+                if self.model_name not in ["GNN"]
                 else PygNodePropPredDataset(name=self.dataset, root="data", transform=T.ToSparseTensor())
             )
+        elif self.dataset == "ogbn-mag":
+            dataset = PygNodePropPredDataset(name=self.dataset, root="data")
         elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo", "Twitch"]:
             PYG_DATASETS = TorchGeometricDatasets(
                 dataset=self.dataset, task=self.task_type, model=self.model_name
@@ -47,7 +52,7 @@ class DataLoader:
         return dataset
 
     def get_LinkPrediction_dataset(self):
-        if self.dataset in ["ogbl-collab", "ogbl-ppa"]:
+        if self.dataset in ["ogbl-collab", "ogbl-ppa", "ogbl-vessel", "ogbl-citation2"]:
             dataset = PygLinkPropPredDataset(name=self.dataset, root="data")
         elif self.dataset in ["Cora", "CiteSeer", "PubMed", "Flickr", "Computers", "Photo", "Twitch"]:
             PYG_DATASETS = TorchGeometricDatasets(
@@ -59,19 +64,20 @@ class DataLoader:
 
     def dataset_summary(self, dataset):
         summary = f"""\n    ===========================
-    Dataset: {dataset.name}:
+    Dataset: {self.dataset}:
     ===========================
     Number of graphs: {len(dataset)} \n
     Number of features: {dataset.num_features} \n
-    Number of classes: {dataset.num_classes}
         """
+        if self.task_type == "NodeClassification":
+            summary += f"Number of classes: {dataset.num_classes}"
         if len(dataset) == 1:
             data = dataset[0]
             summary += f"""
     Number of nodes: {data.num_nodes} \n
-    Number of edges: {data.num_edges} \n
-    Is undirected: {data.is_undirected()}
-            """
+    Number of edges: {data.num_edges} \n"""
+        if self.dataset != "ogbn-mag":
+            summary += f"""Is undirected: {data.is_undirected()}"""
         if self.log:
             self.log.info(summary)
 

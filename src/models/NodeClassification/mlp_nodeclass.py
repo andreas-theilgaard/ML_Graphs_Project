@@ -1,11 +1,15 @@
 from src.models.NodeClassification.mlp import MLP_model
-from ogb.nodeproppred import Evaluator
+
+# from ogb.nodeproppred import Evaluator
 import torch
 import numpy as np
 from src.models.utils import set_seed
+from src.models.utils import create_path
 from src.models.utils import prepare_metric_cols
 from src.models.utils import get_k_laplacian_eigenvectors
 from torch_geometric.utils import to_undirected
+from src.models.metrics import METRICS
+from torch_geometric.data import Data
 
 
 def mlp_node_classification(dataset, config, training_args, log, save_path, seeds, Logger):
@@ -28,7 +32,17 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
 
     """
     data = dataset[0]
-    split_idx = dataset.get_idx_split()
+    if config.dataset.dataset_name == "ogbn-mag":
+        data = Data(
+            x=data.x_dict["paper"],
+            edge_index=data.edge_index_dict[("paper", "cites", "paper")],
+            y=data.y_dict["paper"],
+        )
+
+    if config.dataset.dataset_name in ["ogbn-arxiv", "ogbn-mag"]:
+        split_idx = dataset.get_idx_split()
+    else:
+        split_idx = {"train": data.train_mask, "valid": data.val_mask, "test": data.test_mask}
 
     if (
         config.dataset[config.model_type].saved_embeddings
@@ -51,15 +65,25 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
         x = get_k_laplacian_eigenvectors(
-            data=data, dataset=dataset, k=config.dataset[config.model_type].K, is_undirected=True
+            data=data,
+            dataset=dataset,
+            k=config.dataset[config.model_type].K,
+            is_undirected=True,
+            for_link=False,
+            edge_split=split_idx,
+            num_nodes=data.x.shape[0],
         )
+    if config.dataset[config.model_type].random:
+        x = torch.normal(0, 1, (data.x.shape[0], 128))
 
     X = x.to(config.device)
     y = data.y.to(config.device)
     if len(y.shape) == 1:
         y = y.unsqueeze(1)
 
-    evaluator = Evaluator(name=config.dataset.dataset_name)
+    evaluator = METRICS(
+        metrics_list=config.dataset.metrics, task=config.dataset.task, dataset=config.dataset.dataset_name
+    )
 
     for seed in seeds:
         set_seed(seed=seed)
@@ -74,6 +98,8 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             dropout=training_args.dropout,
             log=log,
             logger=Logger,
+            apply_batchnorm=training_args.batchnorm,
+            config=config,
         )
 
         model.fit(
@@ -83,11 +109,24 @@ def mlp_node_classification(dataset, config, training_args, log, save_path, seed
             split_idx=split_idx,
             evaluator=evaluator,
             lr=training_args.lr,
+            weight_decay=training_args.weight_decay if training_args.weight_decay else 0,
         )
         Logger.end_run()
 
     Logger.save_results(save_path + "/results.json")
-    Logger.get_statistics(
-        metrics=prepare_metric_cols(config.dataset.metrics),
-        directions=["-", "+", "+", "+"],
-    )
+    if "save_to_folder" in config:
+        create_path(config.save_to_folder)
+        additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
+        create_path(f"{additional_save_path}")
+        saved_embeddings_path = (
+            False
+            if not config.dataset.DownStream.saved_embeddings
+            else (config.dataset.DownStream.saved_embeddings.split("/"))[-1]
+        )
+        print(saved_embeddings_path)
+        Logger.save_results(
+            additional_save_path
+            + f"/results_{saved_embeddings_path}_{config.dataset.DownStream.using_features}_{config.dataset.DownStream.use_spectral}_{config.dataset.DownStream.random}.json"
+        )
+
+    Logger.get_statistics(metrics=prepare_metric_cols(config.dataset.metrics))
