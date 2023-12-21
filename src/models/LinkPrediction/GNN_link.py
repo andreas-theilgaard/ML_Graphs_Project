@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 from torch_sparse import SparseTensor
 import torch_geometric.transforms as T
-from torch_geometric.nn import GCNConv, SAGEConv
+from torch_geometric.nn import GCNConv, SAGEConv, GATConv
 from tqdm import tqdm
 from src.models.utils import set_seed, prepare_metric_cols
 from src.models.metrics import METRICS
@@ -66,6 +66,27 @@ class GCN(torch.nn.Module):
         return x
 
 
+class GAT(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout, att_heads=1):
+        super(GAT, self).__init__()
+
+        self.dropout = dropout
+
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(GATConv(in_channels, hidden_channels, heads=att_heads))
+        for _ in range(num_layers - 2):
+            self.convs.append(GATConv(hidden_channels * att_heads, hidden_channels, heads=att_heads))
+        self.convs.append(GATConv(hidden_channels * att_heads, out_channels, concat=False, heads=1))
+
+    def forward(self, x, adj_t):
+        for i, conv in enumerate(self.convs[:-1]):
+            x = conv(x, adj_t)
+            x = F.elu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.convs[-1](x, adj_t)
+        return x
+
+
 class LinkPredictor(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
         super(LinkPredictor, self).__init__()
@@ -90,40 +111,6 @@ class LinkPredictor(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.lins[-1](x)
         return torch.sigmoid(x)
-
-
-def train_citation(config, model, predictor, data, split_edge, optimizer, batch_size):
-    model.train()
-    predictor.train()
-
-    source_edge = split_edge["train"]["source_node"].to(data.x.device)
-    target_edge = split_edge["train"]["target_node"].to(data.x.device)
-
-    total_loss = total_examples = 0
-    for perm in DataLoader(range(source_edge.size(0)), batch_size, shuffle=True):
-        optimizer.zero_grad()
-
-        h = model(data.x, data.adj_t)
-
-        src, dst = source_edge[perm], target_edge[perm]
-
-        pos_out = predictor(h[src], h[dst])
-        pos_loss = -torch.log(pos_out + 1e-15).mean()
-
-        # Just do some trivial random sampling.
-        dst_neg = torch.randint(0, data.num_nodes, src.size(), dtype=torch.long, device=h.device)
-        neg_out = predictor(h[src], h[dst_neg])
-        neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
-
-        loss = pos_loss + neg_loss
-        loss.backward()
-        optimizer.step()
-
-        num_examples = pos_out.size(0)
-        total_loss += loss.item() * num_examples
-        total_examples += num_examples
-
-    return total_loss / total_examples
 
 
 # def train(config, model, predictor, data, split_edge, optimizer, batch_size):
@@ -171,8 +158,11 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
     total_loss = total_examples = 0
     for perm in DataLoader(range(pos_train_edge.size(0)), batch_size, shuffle=True):
         optimizer.zero_grad()
-
-        h = model(data.x, data.adj_t)
+        h = (
+            model(data.x, data.adj_t)
+            if config.dataset.dataset_name in ["ogbl-collab", "Twitch", "Flickr"]
+            else model(data.x, data.edge_index)
+        )
 
         edge = pos_train_edge[perm].t()
 
@@ -206,54 +196,53 @@ def train(config, model, predictor, data, split_edge, optimizer, batch_size):
     return total_loss / total_examples
 
 
+# @torch.no_grad()
+# def test_citation(config, model, predictor, data, split_edge, evaluator, batch_size):
+#     predictor.eval()
+
+#     h = model(data.x, data.adj_t)
+
+#     def test_split(split):
+#         source = split_edge[split]["source_node"].to(h.device)
+#         target = split_edge[split]["target_node"].to(h.device)
+#         target_neg = split_edge[split]["target_node_neg"].to(h.device)
+
+#         pos_preds = []
+#         for perm in DataLoader(range(source.size(0)), batch_size):
+#             src, dst = source[perm], target[perm]
+#             pos_preds += [predictor(h[src], h[dst]).squeeze().cpu()]
+#         pos_pred = torch.cat(pos_preds, dim=0)
+
+#         neg_preds = []
+#         source = source.view(-1, 1).repeat(1, 1000).view(-1)
+#         target_neg = target_neg.view(-1)
+#         for perm in DataLoader(range(source.size(0)), batch_size):
+#             src, dst_neg = source[perm], target_neg[perm]
+#             neg_preds += [predictor(h[src], h[dst_neg]).squeeze().cpu()]
+#         neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
+
+#         return pos_pred, neg_pred
+
+#     train = test_split("eval_train")
+#     valid = test_split("valid")
+#     test = test_split("test")
+
+#     predictions = {
+#         "train": {"y_pred_pos": train[0], "y_pred_neg": train[1]},
+#         "val": {"y_pred_pos": valid[0], "y_pred_neg": valid[1]},
+#         "test": {"y_pred_pos": test[0], "y_pred_neg": test[1]},
+#     }
+#     results = evaluator.collect_metrics(predictions)
+
+#     return results
+
+
 @torch.no_grad()
-def test_citation(config, model, predictor, data, split_edge, evaluator, batch_size):
-    predictor.eval()
-
-    h = model(data.x, data.adj_t)
-
-    def test_split(split):
-        source = split_edge[split]["source_node"].to(h.device)
-        target = split_edge[split]["target_node"].to(h.device)
-        target_neg = split_edge[split]["target_node_neg"].to(h.device)
-
-        pos_preds = []
-        for perm in DataLoader(range(source.size(0)), batch_size):
-            src, dst = source[perm], target[perm]
-            pos_preds += [predictor(h[src], h[dst]).squeeze().cpu()]
-        pos_pred = torch.cat(pos_preds, dim=0)
-
-        neg_preds = []
-        source = source.view(-1, 1).repeat(1, 1000).view(-1)
-        target_neg = target_neg.view(-1)
-        for perm in DataLoader(range(source.size(0)), batch_size):
-            src, dst_neg = source[perm], target_neg[perm]
-            neg_preds += [predictor(h[src], h[dst_neg]).squeeze().cpu()]
-        neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
-
-        return pos_pred, neg_pred
-
-    train = test_split("eval_train")
-    valid = test_split("valid")
-    test = test_split("test")
-
-    predictions = {
-        "train": {"y_pred_pos": train[0], "y_pred_neg": train[1]},
-        "val": {"y_pred_pos": valid[0], "y_pred_neg": valid[1]},
-        "test": {"y_pred_pos": test[0], "y_pred_neg": test[1]},
-    }
-    results = evaluator.collect_metrics(predictions)
-
-    return results
-
-
-@torch.no_grad()
-def test(config, model, predictor, data, split_edge, evaluator, batch_size):
+def test_collab(config, model, predictor, data, split_edge, evaluator, batch_size):
     model.eval()
     predictor.eval()
 
     h = model(data.x, data.adj_t)
-
     pos_train_edge = split_edge["train"]["edge"].to(h.device)
 
     pos_valid_edge = split_edge["valid"]["edge"].to(h.device)
@@ -279,8 +268,6 @@ def test(config, model, predictor, data, split_edge, evaluator, batch_size):
         neg_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
 
-    h = model(data.x, data.full_adj_t)
-
     pos_test_preds = []
     for perm in DataLoader(range(pos_test_edge.size(0)), batch_size):
         edge = pos_test_edge[perm].t()
@@ -300,6 +287,82 @@ def test(config, model, predictor, data, split_edge, evaluator, batch_size):
     }
     results = evaluator.collect_metrics(predictions)
     return results
+
+
+@torch.no_grad()
+def evaluate_data(type_, model, predictor, data, split_edge, evaluator, batch_size):
+    model.eval()
+    predictor.eval()
+
+    h = model(data.x, data.edge_index)
+
+    pos_test_edge = split_edge[type_]["edge"].to(h.device)
+    if type_ != "train":
+        neg_test_edge = split_edge[type_]["edge_neg"].to(h.device)
+
+    pos_test_preds = []
+    for perm in DataLoader(range(pos_test_edge.size(0)), batch_size):
+        edge = pos_test_edge[perm].t()
+        pos_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+    pos_test_pred = torch.cat(pos_test_preds, dim=0)
+
+    if type_ != "train":
+        neg_test_preds = []
+        for perm in DataLoader(range(neg_test_edge.size(0)), batch_size):
+            edge = neg_test_edge[perm].t()
+            neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+        neg_test_pred = torch.cat(neg_test_preds, dim=0)
+
+    return (pos_test_pred, neg_test_pred) if type_ != "train" else (pos_test_pred, None)
+
+
+def test(config, model, predictor, data, split_edge, evaluator, batch_size):
+    if config.dataset.dataset_name in ["ogbl-collab", "Twitch", "Flickr"]:
+        return test_collab(
+            config=config,
+            model=model,
+            predictor=predictor,
+            data=data,
+            split_edge=split_edge,
+            evaluator=evaluator,
+            batch_size=batch_size,
+        )
+    else:
+        pos_train_pred, _ = evaluate_data(
+            type_="train",
+            model=model,
+            predictor=predictor,
+            data=data["train"],
+            split_edge=split_edge,
+            evaluator=evaluator,
+            batch_size=batch_size,
+        )
+        pos_valid_pred, neg_valid_pred = evaluate_data(
+            type_="valid",
+            model=model,
+            predictor=predictor,
+            data=data["valid"],
+            split_edge=split_edge,
+            evaluator=evaluator,
+            batch_size=batch_size,
+        )
+        pos_test_pred, neg_test_pred = evaluate_data(
+            type_="test",
+            model=model,
+            predictor=predictor,
+            data=data["test"],
+            split_edge=split_edge,
+            evaluator=evaluator,
+            batch_size=batch_size,
+        )
+
+        predictions = {
+            "train": {"y_pred_pos": pos_train_pred, "y_pred_neg": neg_valid_pred},
+            "val": {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred},
+            "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
+        }
+        results = evaluator.collect_metrics(predictions)
+        return results
 
 
 def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger=None, seeds=None):
@@ -331,29 +394,10 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
             },
         }
 
-    if config.dataset.dataset_name == "ogbl-citation2":
-        data.adj_t = data.adj_t.to_symmetric()
-        data = data.to(config.device)
-        torch.manual_seed(12345)
-        idx = torch.randperm(split_edge["train"]["source_node"].numel())[:86596]
-        split_edge["eval_train"] = {
-            "source_node": split_edge["train"]["source_node"][idx],
-            "target_node": split_edge["train"]["target_node"][idx],
-            "target_node_neg": split_edge["valid"]["target_node_neg"],
-        }
-
     data = data.to(config.device)
     evaluator = METRICS(
         metrics_list=config.dataset.metrics, task=config.dataset.task, dataset=config.dataset.dataset_name
     )
-
-    if config.dataset.dataset_name == "ogbl-collab" and training_args.use_valedges:
-        val_edge_index = split_edge["valid"]["edge"].t()
-        full_edge_index = torch.cat([edge_index, val_edge_index], dim=-1)
-        data.full_adj_t = SparseTensor.from_edge_index(full_edge_index).t()
-        data.full_adj_t = data.full_adj_t.to_symmetric()
-    else:
-        data.full_adj_t = data.adj_t
 
     if config.dataset.GNN.extra_info:
         embedding = torch.load(config.dataset[config.model_type].extra_info, map_location=config.device)
@@ -394,15 +438,15 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                 dropout=training_args.dropout,
                 out_channels=training_args.hidden_channels,
             ).to(config.device)
-
-            if config.dataset.dataset_name in ["ogbl-citation2"]:
-                # Pre-compute GCN normalization.
-                adj_t = data.adj_t.set_diag()
-                deg = adj_t.sum(dim=1).to(torch.float)
-                deg_inv_sqrt = deg.pow(-0.5)
-                deg_inv_sqrt[deg_inv_sqrt == float("inf")] = 0
-                adj_t = deg_inv_sqrt.view(-1, 1) * adj_t * deg_inv_sqrt.view(1, -1)
-                data.adj_t = adj_t
+        elif config.dataset.GNN.model == "GAT":
+            model = GAT(
+                in_channels=data.x.shape[1],
+                hidden_channels=training_args.hidden_channels,
+                num_layers=training_args.num_layers,
+                dropout=training_args.dropout,
+                out_channels=training_args.hidden_channels,
+                att_heads=1,
+            ).to(config.device)
         else:
             raise ValueError(f"Model {config.dataset.GNN.model} not implemented")
 
@@ -428,17 +472,17 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                     config=config,
                     model=model,
                     predictor=predictor,
-                    data=data,
+                    data=data,  # data
                     split_edge=split_edge,
                     optimizer=optimizer,
                     batch_size=training_args.batch_size,
                 )
-                if config.dataset.dataset_name != "ogbl-citation2"
-                else train_citation(
+                if config.dataset.dataset_name in ["ogbl-collab", "Flickr", "Twitch"]
+                else train(
                     config=config,
                     model=model,
                     predictor=predictor,
-                    data=data,
+                    data=train_data.to(config.device),  # data
                     split_edge=split_edge,
                     optimizer=optimizer,
                     batch_size=training_args.batch_size,
@@ -455,12 +499,12 @@ def GNN_link_trainer(dataset, config, training_args, save_path, log=None, Logger
                     evaluator=evaluator,
                     batch_size=training_args.batch_size,
                 )
-                if config.dataset.dataset_name != "ogbl-citation2"
-                else test_citation(
+                if config.dataset.dataset_name in ["ogbl-collab", "Flickr", "Twitch"]
+                else test(
                     config=config,
                     model=model,
                     predictor=predictor,
-                    data=data,
+                    data={"train": train_data, "valid": val_data, "test": test_data},
                     split_edge=split_edge,
                     evaluator=evaluator,
                     batch_size=training_args.batch_size,

@@ -1,9 +1,9 @@
 dataset_name: 'Cora'
 task: 'LinkPrediction'
 metrics: ['hits@10','hits@50','hits@100','acc','auc','roc_auc']
-track_metric: 'acc'
+track_metric: 'roc_auc'
 
-DIM: 16
+DIM: 2
 
 DownStream:
   saved_embeddings: False
@@ -16,8 +16,8 @@ DownStream:
     num_layers: 2
     dropout: 0.0
     lr: 0.01
-    hidden_channels: 128
-    batch_size: 512
+    hidden_channels: 16
+    batch_size: 256
 
 Node2Vec:
   training:
@@ -25,7 +25,7 @@ Node2Vec:
     walk_length: 80
     context_size: 20
     walks_per_node: 10
-    epochs: 10
+    epochs: 20
     lr: 0.01
     batch_size: 256
     num_negative_samples: 1
@@ -33,7 +33,7 @@ Node2Vec:
     num_workers: 4
 
 GNN:
-  model: 'GraphSage'
+  model: 'GAT'
   extra_info: False
   use_spectral: False
   K: ${dataset.DIM}
@@ -42,9 +42,9 @@ GNN:
     num_layers: 2
     dropout: 0.0
     lr: 0.01
-    epochs: 300
-    batch_size: 1024
-    weight_decay: 0
+    epochs: 400
+    batch_size: 256
+    weight_decay: 0.00005
 
 
 Shallow:
@@ -56,13 +56,13 @@ Shallow:
     init: 'laplacian'
     decode_type: 'dist'
     batch_size: 256
-    train_batch: False
+    train_batch: True
     weight_decay: 0.00005
 
 
 
 combined:
-  type: 'comb3'
+  type: 'comb2'
   comb2:
     training:
       shallow_lr: 0.1
@@ -82,16 +82,17 @@ combined:
       weight_decay_deep: 0.0
 
       balance: False
-      warm_start: 500
+      warm_start: 150
       joint_train: 300
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.01
       lambda_lr: 0.01
       lambda_: 1.0
-      batch_size: 512
+      batch_size: 256
       direction: 'deep_first'
-      shallow_frozen_epochs: 0
-      deep_frozen_epochs: 200
+      shallow_frozen_epochs: 150
+      deep_frozen_epochs: 150
+      MLP_HIDDEN_CHANNELS: 8
 
   comb3:
     training:
@@ -103,25 +104,25 @@ combined:
       weight_decay_shallow: 0.00005
 
 
-      deep_model: 'GraphSage'
+      deep_model: 'GAT'
       deep_hidden_channels: ${dataset.DIM}
       deep_lr: 0.01
       deep_out_dim: ${dataset.DIM}
       deep_num_layers: 2
       deep_dropout: 0.0
 
-      warm_start: 500
+      warm_start: 150
       joint_train: 300
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.01
       lambda_lr: 0.01
       lambda_: 1.0
-      batch_size: 512
+      batch_size: 256
       direction: 'deep_first'
       shallow_frozen_epochs: 0
       deep_frozen_epochs: 300
 
 
-      MLP_HIDDEN_CHANNELS: 16
+      MLP_HIDDEN_CHANNELS: 8
       MLP_LAYERS: 2
       MLP_DROPOUT: 0.0

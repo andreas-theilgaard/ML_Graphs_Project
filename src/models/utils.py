@@ -23,9 +23,10 @@ def prepare_metric_cols(metrics):
 
 
 def get_seeds(n=10):
-    n = min(n, 10)
-    seeds = [42, 33, 18, 34, 77, 84, 20, 32, 90, 82]
-    return seeds[:n]
+    # n = min(n, 10)
+    # seeds = [42, 33, 18, 34, 77, 84, 20, 32, 90, 82]
+    # return seeds[:n]
+    return list(range(n))
 
 
 def set_seed(seed):

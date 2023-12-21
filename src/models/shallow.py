@@ -80,8 +80,6 @@ def test_link(config, model, split_edge, evaluator, batch_size, device):
     model.eval()
     # get training edges
     pos_train_edge = split_edge["train"]["edge"].to(device)
-    if config.dataset.dataset_name in ["ogbl-vessel"]:
-        neg_train_edge = split_edge["train"]["edge_neg"].to(device)
     # get validation edges
     pos_valid_edge = split_edge["valid"]["edge"].to(device)
     neg_valid_edge = split_edge["valid"]["edge_neg"].to(device)
@@ -94,13 +92,6 @@ def test_link(config, model, split_edge, evaluator, batch_size, device):
         edge = pos_train_edge[perm].t()
         pos_train_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
     pos_train_pred = torch.cat(pos_train_preds, dim=0)
-
-    if config.dataset.dataset_name in ["ogbl-vessel"]:
-        neg_train_preds = []
-        for perm in DataLoader(range(pos_train_edge.size(0)), batch_size):
-            edge = neg_train_edge[perm].t()
-            neg_train_preds += [torch.sigmoid(model(edge[0], edge[1])).cpu()]
-        neg_train_pred = torch.cat(neg_train_preds, dim=0)
 
     pos_valid_preds = []
     for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
@@ -132,45 +123,6 @@ def test_link(config, model, split_edge, evaluator, batch_size, device):
         "test": {"y_pred_pos": pos_test_pred, "y_pred_neg": neg_test_pred},
     }
     results = evaluator.collect_metrics(predictions)
-    return results
-
-
-@torch.no_grad()
-def test_link_citation(config, model, split_edge, evaluator, batch_size, device):
-    model.eval()
-
-    def test_split(split):
-        source = split_edge[split]["source_node"].to(device)
-        target = split_edge[split]["target_node"].to(device)
-        target_neg = split_edge[split]["target_node_neg"].to(device)
-
-        pos_preds = []
-        for perm in DataLoader(range(source.size(0)), batch_size):
-            src, dst = source[perm], target[perm]
-            pos_preds += [torch.sigmoid(model(src, dst)).squeeze().cpu()]
-        pos_pred = torch.cat(pos_preds, dim=0)
-
-        neg_preds = []
-        source = source.view(-1, 1).repeat(1, 1000).view(-1)
-        target_neg = target_neg.view(-1)
-        for perm in DataLoader(range(source.size(0)), batch_size):
-            src, dst_neg = source[perm], target_neg[perm]
-            neg_preds += [torch.sigmoid(model(src, dst_neg)).squeeze().cpu()]
-        neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
-
-        return pos_pred, neg_pred
-
-    train = test_split("eval_train")
-    valid = test_split("valid")
-    test = test_split("test")
-
-    predictions = {
-        "train": {"y_pred_pos": train[0], "y_pred_neg": train[1]},
-        "val": {"y_pred_pos": valid[0], "y_pred_neg": valid[1]},
-        "test": {"y_pred_pos": test[0], "y_pred_neg": test[1]},
-    }
-    results = evaluator.collect_metrics(predictions)
-
     return results
 
 
@@ -250,76 +202,45 @@ class ShallowTrainer:
 
     def batch_train(self, model, data, criterion, optimizer, num_nodes, batch_size, split_edge):
 
-        if self.config.dataset.dataset_name == "ogbl-citation2":
-            model.train()
-            source_edge = split_edge["train"]["source_node"].to(data.device)
-            target_edge = split_edge["train"]["target_node"].to(data.device)
+        model.train()
 
-            loss_list = []
-            acc_list = []
-            for perm in DataLoader(range(source_edge.size(0)), batch_size, shuffle=True):
-                optimizer.zero_grad()
+        # Positive edges
+        pos_edge_index = data.edge_index if self.config.dataset.task == "NodeClassification" else data
+        pos_edge_index = pos_edge_index.to(self.config.device)
 
-                src, dst = source_edge[perm], target_edge[perm]
+        if self.config.dataset.dataset_name == "ogbl-vessel":
+            neg_edge_index = split_edge["train"]["edge_neg"].to(self.config.device)
 
-                pos_out = model(src, dst)
+        loss_list = []
+        acc_list = []
+        for perm in DataLoader(range(pos_edge_index.size(1)), batch_size, shuffle=True):
+            optimizer.zero_grad()
 
-                # Just do some trivial random sampling.
-                # dst_neg = self.get_negative_samples(src, num_nodes, src.size())
+            edge = pos_edge_index[:, perm]
+            pos_out = model(edge[0], edge[1])
 
-                dst_neg = torch.randint(0, data.num_nodes, src.size(), dtype=torch.long, device=data.device)
-                neg_out = model(src, dst_neg)
-
-                out = torch.cat([pos_out, neg_out], dim=0)
-                y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(
-                    self.config.device
-                )
-                acc = self.metrics(out, y, type="accuracy")
-                loss = criterion(out, y)
-
-                loss.backward()
-                optimizer.step()
-            return loss.item(), acc
-        else:
-            model.train()
-
-            # Positive edges
-            pos_edge_index = data.edge_index if self.config.dataset.task == "NodeClassification" else data
-            pos_edge_index = pos_edge_index.to(self.config.device)
-
+            # Negative edges
             if self.config.dataset.dataset_name == "ogbl-vessel":
-                neg_edge_index = split_edge["train"]["edge_neg"].to(self.config.device)
+                edge = neg_edge_index[perm].t()
+            else:
+                edge = self.get_negative_samples(edge, num_nodes, edge.size(1))
+            edge = edge.to(self.config.device)
+            neg_out = model(edge[0], edge[1])
+            assert pos_out.shape == neg_out.shape
 
-            loss_list = []
-            acc_list = []
-            for perm in DataLoader(range(pos_edge_index.size(1)), batch_size, shuffle=True):
-                optimizer.zero_grad()
+            # Combining positive and negative edges
+            out = torch.cat([pos_out, neg_out], dim=0)
+            y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(
+                self.config.device
+            )
+            acc = self.metrics(out, y, type="accuracy")
+            loss = criterion(out, y)
+            loss.backward()
+            optimizer.step()
 
-                edge = pos_edge_index[:, perm]
-                pos_out = model(edge[0], edge[1])
-
-                # Negative edges
-                if self.config.dataset.dataset_name == "ogbl-vessel":
-                    edge = neg_edge_index[perm].t()
-                else:
-                    edge = self.get_negative_samples(edge, num_nodes, edge.size(1))
-                edge = edge.to(self.config.device)
-                neg_out = model(edge[0], edge[1])
-                assert pos_out.shape == neg_out.shape
-
-                # Combining positive and negative edges
-                out = torch.cat([pos_out, neg_out], dim=0)
-                y = torch.cat([torch.ones(pos_out.size(0)), torch.zeros(neg_out.size(0))], dim=0).to(
-                    self.config.device
-                )
-                acc = self.metrics(out, y, type="accuracy")
-                loss = criterion(out, y)
-                loss.backward()
-                optimizer.step()
-
-                loss_list.append(loss.item())
-                acc_list.append(acc)
-            return (np.mean(loss_list), np.mean(acc_list))
+            loss_list.append(loss.item())
+            acc_list.append(acc)
+        return (np.mean(loss_list), np.mean(acc_list))
 
     def save_embeddings(self, model, seed, extra=None):
         if extra:
@@ -335,14 +256,6 @@ class ShallowTrainer:
 
         NUMBER_NODES = data.num_nodes
 
-        if self.config.dataset.dataset_name == "ogbn-mag":
-            data = Data(
-                x=data.x_dict["paper"],
-                edge_index=data.edge_index_dict[("paper", "cites", "paper")],
-                y=data.y_dict["paper"],
-            )
-            NUMBER_NODES = data.x.shape[0]
-
         if data.is_directed():
             data.edge_index = to_undirected(data.edge_index)
         data = data.to(self.config.device)
@@ -350,7 +263,7 @@ class ShallowTrainer:
         # If task is link prediction only use training edges
         if self.config.dataset.task == "LinkPrediction":
             for_link = True
-            if self.config.dataset.dataset_name in ["ogbl-collab", "ogbl-citation2"]:
+            if self.config.dataset.dataset_name in ["ogbl-collab"]:
                 split_edge = dataset.get_edge_split()
 
             elif self.config.dataset.dataset_name in ["Cora", "Flickr", "CiteSeer", "PubMed", "Twitch"]:
@@ -378,15 +291,6 @@ class ShallowTrainer:
                     [split_edge["train"]["source_node"], split_edge["train"]["target_node"]]
                 ).to(self.config.device)
             )
-            # assert torch.unique(data.flatten()).size(0) == NUMBER_NODES
-            if self.config.dataset.dataset_name == "ogbl-citation2":
-                torch.manual_seed(12345)
-                idx = torch.randperm(split_edge["train"]["source_node"].numel())[:86596]
-                split_edge["eval_train"] = {
-                    "source_node": split_edge["train"]["source_node"][idx],
-                    "target_node": split_edge["train"]["target_node"][idx],
-                    "target_node_neg": split_edge["valid"]["target_node_neg"],
-                }
 
         for seed in seeds:
             set_seed(seed)
@@ -452,24 +356,13 @@ class ShallowTrainer:
                     )
                 prog_bar.set_postfix({"loss": loss, "Train Acc.": acc})
                 if for_link:
-                    results = (
-                        test_link(
-                            config=self.config,
-                            model=model,
-                            split_edge=split_edge,
-                            evaluator=evaluator,
-                            batch_size=self.training_args.batch_size,
-                            device=self.config.device,
-                        )
-                        if self.config.dataset.dataset_name != "ogbl-citation2"
-                        else test_link_citation(
-                            config=self.config,
-                            model=model,
-                            split_edge=split_edge,
-                            evaluator=evaluator,
-                            batch_size=self.training_args.batch_size,
-                            device=self.config.device,
-                        )
+                    results = test_link(
+                        config=self.config,
+                        model=model,
+                        split_edge=split_edge,
+                        evaluator=evaluator,
+                        batch_size=self.training_args.batch_size,
+                        device=self.config.device,
                     )
 
                     save_model = self.Logger.add_to_run(loss=loss, results=results)

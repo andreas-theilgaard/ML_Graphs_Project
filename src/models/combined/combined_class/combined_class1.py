@@ -10,7 +10,7 @@ from src.models.metrics import METRICS
 from src.models.logger import LoggerClass
 from src.models.utils import prepare_metric_cols
 import copy
-from src.models.combined.combined_class.combined_class_utils import NodeClassifier, test_MLP, SAGE, GCN
+from src.models.combined.combined_class.combined_class_utils import NodeClassifier, test_MLP, SAGE, GCN, GAT
 from torch_geometric.data import Data
 from src.models.utils import create_path
 
@@ -170,6 +170,16 @@ def fit_combined1_class(config, dataset, training_args, Logger, log, seeds, save
                 num_layers=training_args.deep_num_layers,
                 dropout=training_args.deep_dropout,
                 apply_batchnorm=training_args.APPLY_BATCHNORM,
+            ).to(config.device)
+        elif training_args.deep_model == "GAT":
+            deep = GAT(
+                in_channels=data.num_features,
+                hidden_channels=training_args.deep_hidden_channels,
+                out_channels=training_args.deep_out_dim,
+                num_layers=training_args.deep_num_layers,
+                dropout=training_args.deep_dropout,
+                apply_batchnorm=training_args.APPLY_BATCHNORM,
+                dataset=config.dataset.dataset_name,
             ).to(config.device)
 
         # setup optimizer

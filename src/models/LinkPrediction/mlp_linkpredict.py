@@ -298,20 +298,6 @@ def mlp_LinkPrediction(dataset, config, training_args, log, save_path, seeds, Lo
             },
         }
 
-    if config.dataset.dataset_name == "ogbl-vessel":
-        # Normalize features
-        data.x[:, 0] = torch.nn.functional.normalize(data.x[:, 0], dim=0)
-        data.x[:, 1] = torch.nn.functional.normalize(data.x[:, 1], dim=0)
-        data.x[:, 2] = torch.nn.functional.normalize(data.x[:, 2], dim=0)
-    if config.dataset.dataset_name == "ogbl-citation2":
-        torch.manual_seed(12345)
-        idx = torch.randperm(split_edge["train"]["source_node"].numel())[:86596]
-        split_edge["eval_train"] = {
-            "source_node": split_edge["train"]["source_node"][idx],
-            "target_node": split_edge["train"]["target_node"][idx],
-            "target_node_neg": split_edge["valid"]["target_node_neg"],
-        }
-
     if (
         config.dataset[config.model_type].saved_embeddings
         and config.dataset[config.model_type].using_features

@@ -34,7 +34,7 @@ Node2Vec:
     num_workers: 4
 
 GNN:
-  model: 'GraphSage'
+  model: 'GAT'
   extra_info: False
   use_spectral: False
   K: ${dataset.DIM}
@@ -62,7 +62,7 @@ GNN_DIRECT:
     decode_type: 'dot'
     init_beta: 0.0
     train_batch: True
-    batch_size: 512
+    batch_size: 1024
 
 
 Shallow:
@@ -112,10 +112,10 @@ combined:
       deep_lr_joint: 0.01
       lambda_lr: 0.01
       lambda_: 1.0
-      batch_size: 512
+      batch_size: 1024
       direction: 'deep_first'
-      shallow_frozen_epochs: 50
-      deep_frozen_epochs: 50
+      shallow_frozen_epochs: 100
+      deep_frozen_epochs: 100
 
   comb2:
     training:
@@ -126,8 +126,7 @@ combined:
       decode_type: 'dist'
       SHALLOW_WARM_START: 200
       SHALLOW_TRAIN_BATCH: True
-      SHALLOW_WARM_BATCH_SIZE: 512
-
+      SHALLOW_WARM_BATCH_SIZE: 1024
 
       deep_model: 'GraphSage'
       deep_hidden_channels: ${dataset.DIM}
@@ -143,7 +142,7 @@ combined:
       APPLY_BATCHNORM: False
 
       epochs: 200
-      batch_size: 512
+      batch_size: 1024
       direction: 'deep_first'
-      shallow_frozen_epochs: 100
+      shallow_frozen_epochs: 0
       deep_frozen_epochs: 200

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from src.data.get_data import DataLoader as DL
-from torch_geometric.nn import SAGEConv, GCNConv
+from torch_geometric.nn import SAGEConv, GCNConv, GATConv
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from src.data.data_utils import get_link_data_split
@@ -153,6 +153,27 @@ class GCN(torch.nn.Module):
         for conv in self.convs[:-1]:
             x = conv(x, adj_t)
             x = F.relu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.convs[-1](x, adj_t)
+        return x
+
+
+class GAT(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout, att_heads=1):
+        super(GAT, self).__init__()
+
+        self.dropout = dropout
+
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(GATConv(in_channels, hidden_channels, heads=att_heads))
+        for _ in range(num_layers - 2):
+            self.convs.append(GATConv(hidden_channels * att_heads, hidden_channels, heads=att_heads))
+        self.convs.append(GATConv(hidden_channels * att_heads, out_channels, concat=False, heads=1))
+
+    def forward(self, x, adj_t):
+        for i, conv in enumerate(self.convs[:-1]):
+            x = conv(x, adj_t)
+            x = F.elu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.convs[-1](x, adj_t)
         return x
@@ -769,6 +790,7 @@ def test_indi_with_predictor(
 
 
 def get_split_edge(data, dataset, config, training_args):
+    data_splits = None
     if config.dataset.dataset_name in ["ogbl-collab", "ogbl-citation2"]:
         split_edge = dataset.get_edge_split()
 
@@ -787,18 +809,8 @@ def get_split_edge(data, dataset, config, training_args):
                 "edge_neg": test_data.neg_edge_label_index.T,
             },
         }
+        data_splits = {"train": train_data, "val": val_data, "test": test_data}
 
-    data = (
-        (split_edge["train"]["edge"]).T
-        if config.dataset.dataset_name != "ogbl-citation2"
-        else torch.vstack([split_edge["train"]["source_node"], split_edge["train"]["target_node"]])
-    )
-    if config.dataset.dataset_name == "ogbl-citation2":
-        torch.manual_seed(12345)
-        idx = torch.randperm(split_edge["train"]["source_node"].numel())[:86596]
-        split_edge["eval_train"] = {
-            "source_node": split_edge["train"]["source_node"][idx],
-            "target_node": split_edge["train"]["target_node"][idx],
-            "target_node_neg": split_edge["valid"]["target_node_neg"],
-        }
-    return data, split_edge
+    data = (split_edge["train"]["edge"]).T
+
+    return (data, split_edge, data_splits)

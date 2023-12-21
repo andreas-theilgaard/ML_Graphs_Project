@@ -22,122 +22,6 @@ import numpy as np
 from src.models.utils import create_path
 
 
-@torch.no_grad()
-def test_link_citation(
-    shallow, deep, predictor, data_deep, config, split_edge, training_args, evaluator, lambda_
-):
-    shallow.eval()
-    deep.eval()
-    predictor.eval()
-
-    W = deep(data_deep.x, data_deep.adj_t)
-
-    def test_split(split):
-        source = split_edge[split]["source_node"].to(config.device)
-        target = split_edge[split]["target_node"].to(config.device)
-        target_neg = split_edge[split]["target_node_neg"].to(config.device)
-
-        pos_preds = []
-        for perm in DataLoader(range(source.size(0)), training_args.batch_size):
-            src, dst = source[perm], target[perm]
-            out_shallow = shallow(src, dst)
-            out_deep = predictor(W[src], W[dst])
-            pred = torch.sigmoid(out_shallow + lambda_ * out_deep)
-            pos_preds += [pred.squeeze().cpu()]
-        pos_pred = torch.cat(pos_preds, dim=0)
-
-        neg_preds = []
-        source = source.view(-1, 1).repeat(1, 1000).view(-1)
-        target_neg = target_neg.view(-1)
-
-        for perm in DataLoader(range(source.size(0)), training_args.batch_size):
-            src, dst_neg = source[perm], target_neg[perm]
-            out_shallow = shallow(src, dst_neg)
-            out_deep = predictor(W[src], W[dst_neg])
-            pred = torch.sigmoid(out_shallow + lambda_ * out_deep)
-            neg_preds += [pred.squeeze().cpu()]
-        neg_pred = torch.cat(neg_preds, dim=0).view(-1, 1000)
-        return {"pos": pos_pred, "neg": neg_pred}
-
-    train = test_split("eval_train")
-    valid = test_split("valid")
-    test = test_split("test")
-
-    predictions = {
-        "train": {"y_pred_pos": train["pos"], "y_pred_neg": train["neg"]},
-        "val": {"y_pred_pos": valid["pos"], "y_pred_neg": valid["neg"]},
-        "test": {"y_pred_pos": test["pos"], "y_pred_neg": test["neg"]},
-    }
-    results = evaluator.collect_metrics(predictions)
-    return results
-
-
-@torch.no_grad()
-def test_link_citation_indi(
-    shallow, deep, predictor, data_deep, config, split_edge, training_args, evaluator
-):
-    shallow.eval()
-    deep.eval()
-
-    W = deep(data_deep.x, data_deep.adj_t)
-
-    def test_split(split):
-        source = split_edge[split]["source_node"].to(config.device)
-        target = split_edge[split]["target_node"].to(config.device)
-        target_neg = split_edge[split]["target_node_neg"].to(config.device)
-
-        pos_preds_shallow = []
-        pos_preds_deep = []
-        for perm in DataLoader(range(source.size(0)), training_args.batch_size):
-            src, dst = source[perm], target[perm]
-            pos_preds_shallow += [torch.sigmoid(shallow(src, dst)).squeeze().cpu()]
-            out_deep = predictor(W[src], W[dst])
-            pos_preds_deep += [torch.sigmoid(out_deep).squeeze().cpu()]
-
-        pos_pred_shallow = torch.cat(pos_preds_shallow, dim=0)
-        pos_pred_deep = torch.cat(pos_preds_deep, dim=0)
-
-        neg_preds_shallow = []
-        neg_preds_deep = []
-
-        source = source.view(-1, 1).repeat(1, 1000).view(-1)
-        target_neg = target_neg.view(-1)
-
-        for perm in DataLoader(range(source.size(0)), training_args.batch_size):
-            src, dst_neg = source[perm], target_neg[perm]
-            neg_preds_shallow += [torch.sigmoid(shallow(src, dst_neg)).squeeze().cpu()]
-            out_deep = predictor(W[src], W[dst_neg])
-            neg_preds_deep += [torch.sigmoid(out_deep).squeeze().cpu()]
-        neg_pred_shallow = torch.cat(neg_preds_shallow, dim=0).view(-1, 1000)
-        neg_pred_deep = torch.cat(neg_preds_deep, dim=0).view(-1, 1000)
-
-        return {
-            "pos_shallow": pos_pred_shallow,
-            "neg_shallow": neg_pred_shallow,
-            "pos_deep": pos_pred_deep,
-            "neg_deep": neg_pred_deep,
-        }
-
-    train = test_split("eval_train")
-    valid = test_split("valid")
-    test = test_split("test")
-
-    predictions_shallow = {
-        "train": {"y_pred_pos": train["pos_shallow"], "y_pred_neg": train["neg_shallow"]},
-        "val": {"y_pred_pos": valid["pos_shallow"], "y_pred_neg": valid["neg_shallow"]},
-        "test": {"y_pred_pos": test["pos_shallow"], "y_pred_neg": test["neg_shallow"]},
-    }
-    predictions_deep = {
-        "train": {"y_pred_pos": train["pos_deep"], "y_pred_neg": train["neg_deep"]},
-        "val": {"y_pred_pos": valid["pos_deep"], "y_pred_neg": valid["neg_deep"]},
-        "test": {"y_pred_pos": test["pos_deep"], "y_pred_neg": test["neg_deep"]},
-    }
-
-    results_shallow = evaluator.collect_metrics(predictions_shallow)
-    results_deep = evaluator.collect_metrics(predictions_deep)
-    return (results_shallow, results_deep)
-
-
 def warm_train(
     shallow,
     deep,
@@ -172,17 +56,10 @@ def warm_train(
         pos_out_deep = predictor(W[edge[0]], W[edge[1]])
 
         # Negative edges
-        if config.dataset.dataset_name == "ogbl-citation2":
-            dst_neg = torch.randint(
-                0, data_deep.x.shape[0], edge[0].size(), dtype=torch.long, device=config.device
-            )
-            neg_out_shallow = shallow(edge[0], dst_neg)
-            neg_out_deep = predictor(W[edge[0]], W[dst_neg])
-        else:
-            neg_edge_index = get_negative_samples(edge, data_deep.x.shape[0], edge.size(1))
-            neg_edge_index = neg_edge_index.to(data_deep.x.device)
-            neg_out_shallow = shallow(neg_edge_index[0], neg_edge_index[1])
-            neg_out_deep = predictor(W[neg_edge_index[0]], W[neg_edge_index[1]])
+        neg_edge_index = get_negative_samples(edge, data_deep.x.shape[0], edge.size(1))
+        neg_edge_index = neg_edge_index.to(data_deep.x.device)
+        neg_out_shallow = shallow(neg_edge_index[0], neg_edge_index[1])
+        neg_out_deep = predictor(W[neg_edge_index[0]], W[neg_edge_index[1]])
 
         # concat positive and negative predictions
         total_predictions_shallow = torch.cat([pos_out_shallow, neg_out_shallow], dim=0)
@@ -249,28 +126,15 @@ def fit_warm_start(
         prog_bar.set_postfix({"Shallow L": loss_shallow.item(), "Deep L": loss_deep.item()})
 
         if i % 10 == 0:
-            results_shallow, results_deep = (
-                test_indi_with_predictor(
-                    shallow=shallow,
-                    deep=deep,
-                    linkpredictor=predictor,
-                    split_edge=split_edge,
-                    x=data_deep.x,
-                    adj_t=data_deep.adj_t,
-                    evaluator=evaluator,
-                    batch_size=batch_size,
-                )
-                if config.dataset.dataset_name != "ogbl-citation2"
-                else test_link_citation_indi(
-                    shallow=shallow,
-                    deep=deep,
-                    predictor=predictor,
-                    data_deep=data_deep,
-                    config=config,
-                    split_edge=split_edge,
-                    training_args=training_args,
-                    evaluator=evaluator,
-                )
+            results_shallow, results_deep = test_indi_with_predictor(
+                shallow=shallow,
+                deep=deep,
+                linkpredictor=predictor,
+                split_edge=split_edge,
+                x=data_deep.x,
+                adj_t=data_deep.adj_t,
+                evaluator=evaluator,
+                batch_size=batch_size,
             )
             log.info(
                 f"Shallow: Train {config.dataset.track_metric}:{results_shallow['train'][config.dataset.track_metric]}, Val {config.dataset.track_metric}:{results_shallow['val'][config.dataset.track_metric]}, Test {config.dataset.track_metric}:{results_shallow['test'][config.dataset.track_metric]}"

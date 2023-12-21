@@ -3,11 +3,11 @@ task: 'NodeClassification'
 metrics: ['acc','f1-micro','f1-macro']
 track_metric: 'acc'
 
-DIM: 16
+DIM: 2
 
 DownStream:
-  saved_embeddings: False
-  using_features: True
+  saved_embeddings: 'outputs/NodeClassification/ogbn-arxiv/Shallow/2023-12-17/22-07-07/embedding_seed=0.pth'
+  using_features: False
   use_spectral: False
   random: False
   K: ${dataset.DIM}
@@ -16,7 +16,7 @@ DownStream:
     num_layers: 3
     dropout: 0.5
     lr: 0.01
-    hidden_channels: 256
+    hidden_channels: 8
     batchnorm: True
     weight_decay: 0
 
@@ -68,7 +68,7 @@ GNN_DIRECT:
 Shallow:
   training:
     lr: 0.1
-    epochs: 400
+    epochs: 150
     init_beta: 0.0
     embedding_dim: ${dataset.DIM}
     init: 'laplacian'
@@ -79,7 +79,7 @@ Shallow:
 
 
 combined:
-  type: 'comb1'
+  type: 'comb2'
   comb1:
     training:
       shallow_lr: 0.1
@@ -97,7 +97,7 @@ combined:
       deep_decode: 'dist'
       gamma: 0.0
 
-      MLP_HIDDEN: 128
+      MLP_HIDDEN: 8
       MLP_NUM_LAYERS: 3
       MLP_DROPOUT: 0.5
       MLP_LR: 0.01
@@ -105,16 +105,16 @@ combined:
       APPLY_BATCHNORM: True
 
       balance: False
-      warm_start: 100
+      warm_start: 150
       joint_train: 300
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.01
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 65536
-      direction: 'shallow_first'
-      shallow_frozen_epochs: 0
-      deep_frozen_epochs: 50
+      direction: 'deep_first'
+      shallow_frozen_epochs: 150
+      deep_frozen_epochs: 150
 
   comb2:
     training:
@@ -135,7 +135,7 @@ combined:
       deep_num_layers: 3
       deep_dropout: 0.5
 
-      MLP_HIDDEN: 256
+      MLP_HIDDEN: 8
       MLP_NUM_LAYERS: 3
       MLP_DROPOUT: 0.5
       MLP_LR: 0.01
@@ -143,6 +143,6 @@ combined:
 
       epochs: 400
       batch_size: 65536
-      direction: 'shallow_first'
-      shallow_frozen_epochs: 200
+      direction: 'deep_first'
+      shallow_frozen_epochs: 0
       deep_frozen_epochs: 400

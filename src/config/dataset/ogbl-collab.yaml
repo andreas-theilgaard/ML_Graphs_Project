@@ -3,7 +3,7 @@ task: 'LinkPrediction'
 metrics: ['hits@10','hits@50','hits@100','acc']
 track_metric: 'hits@50'
 
-DIM: 16
+DIM: 128
 
 DownStream:
   saved_embeddings: False
@@ -34,7 +34,7 @@ Node2Vec:
     num_workers: 4
 
 GNN:
-  model: 'GraphSage'
+  model: 'GAT'
   extra_info: False
   use_spectral: False
   K: ${dataset.DIM}
@@ -62,7 +62,7 @@ Shallow:
     weight_decay: 0
 
 combined:
-  type: 'comb3'
+  type: 'comb2'
   comb2:
     training:
       shallow_lr: 0.1
@@ -70,6 +70,7 @@ combined:
       embedding_dim: ${dataset.DIM}
       init: 'laplacian'
       decode_type: 'dist'
+      weight_decay_shallow: 0
 
 
       deep_model: 'GraphSage'
@@ -78,6 +79,7 @@ combined:
       deep_out_dim: ${dataset.DIM}
       deep_num_layers: 3
       deep_dropout: 0.0
+      weight_decay_deep: 0
 
       balance: False
       warm_start: 100
@@ -87,9 +89,9 @@ combined:
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 65536
-      direction: 'shallow_first'
-      shallow_frozen_epochs: 0
-      deep_frozen_epochs: 0
+      direction: 'deep_first'
+      shallow_frozen_epochs: 200
+      deep_frozen_epochs: 200
 
   comb3:
     training:
@@ -115,10 +117,10 @@ combined:
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 65536
-      direction: 'shallow_first'
+      direction: 'deep_first'
       shallow_frozen_epochs: 0
-      deep_frozen_epochs: 0
+      deep_frozen_epochs: 400
 
-      MLP_HIDDEN_CHANNELS: 256
+      MLP_HIDDEN_CHANNELS: ${dataset.DIM}
       MLP_LAYERS: 3
-      MLP_DROPOUT: 0.5
+      MLP_DROPOUT: 0.0

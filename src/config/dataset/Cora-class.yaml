@@ -6,8 +6,8 @@ track_metric: 'acc'
 DIM: 16
 
 DownStream:
-  saved_embeddings: False
-  using_features: True
+  saved_embeddings: 'outputs/NodeClassification/Cora/Shallow/2023-12-17/22-00-09/embedding_seed=1.pth'
+  using_features: False
   use_spectral: False
   random: False
   K: ${dataset.DIM}
@@ -16,7 +16,7 @@ DownStream:
     num_layers: 2
     dropout: 0.5
     lr: 0.01
-    hidden_channels: 16
+    hidden_channels: 8
     batchnorm: False
     weight_decay: 0.0005
 
@@ -44,7 +44,7 @@ GNN:
     num_layers: 2
     dropout: 0.5
     lr: 0.01
-    epochs: 200
+    epochs: 500
     batchnorm: False
     weight_decay: 0.0005
 
@@ -72,15 +72,15 @@ Shallow:
     epochs: 500
     init_beta: 0.0
     embedding_dim: ${dataset.DIM}
-    init: 'random'
+    init: 'laplacian'
     decode_type: 'dist'
     train_batch: True
     batch_size: 256
-    weight_decay: 0.00005
+    weight_decay: 0.0005
 
 
 combined:
-  type: 'comb1'
+  type: 'comb2'
   comb1:
     training:
       shallow_lr: 0.01
@@ -98,32 +98,32 @@ combined:
       deep_decode: 'dist'
       gamma: 0.0
 
-      MLP_HIDDEN: 16
+      MLP_HIDDEN: 8
       MLP_NUM_LAYERS: 2
       MLP_DROPOUT: 0.5
       MLP_LR: 0.01
-      MLP_EPOCHS: 300
+      MLP_EPOCHS: 200
       APPLY_BATCHNORM: False
 
 
       balance: False
       warm_start: 200
-      joint_train: 200
+      joint_train: 300
       shallow_lr_joint: 0.01
       deep_lr_joint: 0.01
       lambda_lr: 0.01
       lambda_: 1.0
       batch_size: 256
       direction: 'deep_first'
-      shallow_frozen_epochs: 100
-      deep_frozen_epochs: 100
+      shallow_frozen_epochs: 150
+      deep_frozen_epochs: 150
 
   comb2:
     training:
       shallow_lr: 0.01
       init_beta: 0.0
       embedding_dim: ${dataset.DIM}
-      init: 'random'
+      init: 'laplacian'
       decode_type: 'dist'
       SHALLOW_WARM_START: 200
       SHALLOW_TRAIN_BATCH: True
@@ -143,8 +143,8 @@ combined:
       MLP_LR: 0.01
       APPLY_BATCHNORM: False
 
-      epochs: 200
+      epochs: 500
       batch_size: 256
       direction: 'deep_first'
       shallow_frozen_epochs: 100
-      deep_frozen_epochs: 200
+      deep_frozen_epochs: 100

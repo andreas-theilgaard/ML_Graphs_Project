@@ -1,6 +1,7 @@
 import torch
 from src.models.NodeClassification.GCN import GCN
 from src.models.NodeClassification.GraphSage import SAGE
+from src.models.NodeClassification.GAT import GAT
 import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
@@ -23,6 +24,7 @@ class GNN:
         num_layers,
         dropout,
         apply_batchnorm,
+        dataset,
     ):
         self.GNN_type = GNN_type
         self.in_channels = in_channels
@@ -31,6 +33,7 @@ class GNN:
         self.num_layers = num_layers
         self.dropout = dropout
         self.apply_batchnorm = apply_batchnorm
+        self.dataset = dataset
 
     def get_gnn_model(self):
         if self.GNN_type == "GCN":
@@ -52,6 +55,19 @@ class GNN:
                 dropout=self.dropout,
                 apply_batchnorm=self.apply_batchnorm,
             )
+
+        elif self.GNN_type == "GAT":
+            model = GAT(
+                in_channels=self.in_channels,
+                hidden_channels=self.hidden_channels,
+                out_channels=self.out_channels,
+                num_layers=self.num_layers,
+                dropout=self.dropout,
+                apply_batchnorm=self.apply_batchnorm,
+                att_heads=1,
+                dataset=self.dataset,
+            )
+
         return model
 
     def train(self, model, data, train_idx, optimizer):
@@ -159,6 +175,7 @@ def GNN_trainer(dataset, config, training_args, log, save_path, seeds, Logger):
             dropout=training_args.dropout,
             num_layers=training_args.num_layers,
             apply_batchnorm=training_args.batchnorm,
+            dataset=config.dataset.dataset_name,
         )
         model = GNN_object.get_gnn_model()
         if (

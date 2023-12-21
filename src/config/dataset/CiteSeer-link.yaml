@@ -1,7 +1,7 @@
 dataset_name: 'CiteSeer'
 task: 'LinkPrediction'
 metrics: ['hits@10','hits@50','hits@100','acc','auc','roc_auc']
-track_metric: 'acc'
+track_metric: 'roc_auc'
 
 DIM: 16
 
@@ -16,7 +16,7 @@ DownStream:
     num_layers: 2
     dropout: 0.0
     lr: 0.01
-    hidden_channels: 8
+    hidden_channels: ${dataset.DIM}
     batch_size: 512
 
 Node2Vec:
@@ -27,7 +27,7 @@ Node2Vec:
     walks_per_node: 10
     epochs: 20
     lr: 0.01
-    batch_size: 256
+    batch_size: 512
     num_negative_samples: 1
     sparse: True
     num_workers: 4
@@ -42,7 +42,7 @@ GNN:
     num_layers: 2
     dropout: 0.0
     lr: 0.01
-    epochs: 300
+    epochs: 400
     batch_size: 512
     weight_decay: 0.0
 
@@ -50,7 +50,7 @@ GNN:
 Shallow:
   training:
     lr: 0.01
-    epochs: 500
+    epochs: 400
     init_beta: 0.0
     embedding_dim: ${dataset.DIM}
     init: 'laplacian'
@@ -80,7 +80,7 @@ combined:
       weight_decay_deep: 0.0
 
       balance: False
-      warm_start: 500
+      warm_start: 400
       joint_train: 300
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.01
@@ -89,7 +89,7 @@ combined:
       batch_size: 512
       direction: 'deep_first'
       shallow_frozen_epochs: 0
-      deep_frozen_epochs: 200
+      deep_frozen_epochs: 300
 
   comb3:
     training:
@@ -108,7 +108,7 @@ combined:
       deep_num_layers: 2
       deep_dropout: 0.0
 
-      warm_start: 500
+      warm_start: 400
       joint_train: 300
       shallow_lr_joint: 0.1
       deep_lr_joint: 0.01

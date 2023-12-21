@@ -2,6 +2,7 @@ import hydra
 from omegaconf import OmegaConf
 import logging
 from src.data.get_data import DataLoader
+from src.data.data_utils import get_link_data_split
 from torch_geometric.utils import to_undirected
 from src.models.utils import get_seeds
 from src.models.logger import LoggerClass
@@ -101,18 +102,14 @@ def main(config):
     ###########################################
     elif config.model_type == "Node2Vec":
         data = dataset[0]
-        if config.dataset.dataset_name == "ogbn-mag":
-            data = Data(
-                x=data.x_dict["paper"],
-                edge_index=data.edge_index_dict[("paper", "cites", "paper")],
-                y=data.y_dict["paper"],
-            )
-        if data.is_directed():
-            data.edge_index = to_undirected(data.edge_index, num_nodes=data.num_nodes)
+        only_train = False
+        if config.dataset.task == "LinkPrediction":
+            if data.is_directed():
+                data.edge_index = to_undirected(data.edge_index)
+            train_data, _, _ = get_link_data_split(data, dataset_name=config.dataset.dataset_name)
 
-        # If LinkPrediciton should problably do some more here
         model = Node2Vec(
-            edge_index=data.edge_index,
+            edge_index=train_data.edge_index if only_train else data.edge_index,
             device=config.device,
             save_path=save_path,
             config=config,

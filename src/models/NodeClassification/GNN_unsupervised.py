@@ -6,7 +6,7 @@ from src.models.metrics import METRICS
 from src.models.utils import create_path
 from torch_geometric.data import Data
 import torch_geometric.transforms as T
-from torch_geometric.nn import GCNConv, SAGEConv
+from torch_geometric.nn import GCNConv, SAGEConv, GATConv
 from torch.utils.data import DataLoader
 import numpy as np
 from torch_geometric.utils import to_undirected, negative_sampling
@@ -63,6 +63,27 @@ class GCN(torch.nn.Module):
         return x
 
 
+class GAT(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout, att_heads=8):
+        super(GAT, self).__init__()
+
+        self.dropout = dropout
+
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(GATConv(in_channels, hidden_channels, heads=att_heads))
+        for _ in range(num_layers - 2):
+            self.convs.append(GATConv(hidden_channels * att_heads, hidden_channels, heads=att_heads))
+        self.convs.append(GATConv(hidden_channels * att_heads, out_channels, concat=False, heads=1))
+
+    def forward(self, x, adj_t):
+        for i, conv in enumerate(self.convs[:-1]):
+            x = conv(x, adj_t)
+            x = F.elu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.convs[-1](x, adj_t)
+        return x
+
+
 class GNN:
     def __init__(self, GNN_type, in_channels, hidden_channels, out_channels, dropout, num_layers):
         self.GNN_type = GNN_type
@@ -89,6 +110,16 @@ class GNN:
                 out_channels=self.out_channels,
                 num_layers=self.num_layers,
                 dropout=self.dropout,
+            )
+
+        elif self.GNN_type == "GAT":
+            model = GAT(
+                in_channels=self.in_channels,
+                hidden_channels=self.hidden_channels,
+                out_channels=self.out_channels,
+                num_layers=self.num_layers,
+                dropout=self.dropout,
+                att_heads=1,
             )
         return model
 
@@ -322,7 +353,7 @@ def GNN_unsupervised_trainer(dataset, config, training_args, log, save_path, see
         if "save_to_folder" in config:
             model.eval()
             with torch.no_grad():
-                embeddings = model(data.x, dataset.data.edge_index)
+                embeddings = model(data.x, data.edge_index)
             create_path(config.save_to_folder)
             additional_save_path = f"{config.save_to_folder}/{config.dataset.task}/{config.dataset.dataset_name}/{config.dataset.DIM}/{config.model_type}"
             create_path(f"{additional_save_path}")
